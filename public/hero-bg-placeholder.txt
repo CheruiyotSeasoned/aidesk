@@ -1,0 +1,26 @@
+# Hero Background Video Setup Instructions
+
+## Quick Setup (Recommended):
+
+1. **Visit Loading.io Waves Generator**: https://loading.io/background/m-waves
+   - Customize colors (blue/purple for AI theme)
+   - Set animation speed to medium
+   - Download as MP4 format
+   - Rename to: hero-bg.mp4
+
+2. **Alternative Free Sources**:
+   - Pexels: Search "AI background" or "tech waves"
+   - Pixabay: Search "digital waves" or "neural network"
+   - Unsplash: Search "abstract tech"
+
+## File Requirements:
+- Format: MP4 (preferred) or GIF
+- Resolution: 1920x1080 or higher
+- Duration: 10-30 seconds (will loop)
+- File size: Under 5MB for web performance
+
+## Files to place in public folder:
+- hero-bg.mp4 (main video)
+- hero-bg.gif (fallback, optional)
+
+## After adding files, your hero section will automatically display the background video with translucent overlay!
