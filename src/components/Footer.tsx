@@ -1,12 +1,16 @@
+import logo from "@/assets/logo.png";
 export const Footer = () => {
   return (
     <footer className="bg-muted/30 border-t border-border py-12 px-4">
       <div className="container mx-auto">
         <div className="grid md:grid-cols-4 gap-8 mb-8">
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-gradient-hero rounded-lg"></div>
-              <span className="text-lg font-bold">AIDESK SPACE</span>
+            <div className="flex items-center mb-4">
+              <img
+                src={logo}
+                alt="Aidesk Logo"
+                className="h-10 w-auto object-contain"
+              />
             </div>
             <p className="text-sm text-muted-foreground">
               Building the world's largest high-quality skill network to power enterprise AI.

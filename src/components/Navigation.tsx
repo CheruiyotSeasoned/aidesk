@@ -3,6 +3,7 @@ import { Menu, User, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoginDialog } from "@/components/LoginDialog";
 import { useEffect, useState } from "react";
+import logo from "@/assets/main-logo.png";
 import { useLocation, useNavigate } from "react-router-dom";
 
 export const Navigation = () => {
@@ -42,14 +43,17 @@ export const Navigation = () => {
       <div className="absolute inset-0 bg-black/20 backdrop-blur-md">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-900/30 via-purple-900/20 to-indigo-900/30"></div>
       </div>
-      
+
       <div className="relative container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg"></div>
-            <span className="text-xl font-bold text-white">AIDESK SPACE</span>
+          <div className="flex items-center">
+            <img
+              src={logo}
+              alt="Aidesk Logo"
+              className="h-10 w-36 object-contain" // increased height & width
+            />
           </div>
-          
+
           <div className="hidden md:flex items-center gap-6">
             <a href="#solutions" className="text-white/90 hover:text-white transition-colors">Solutions</a>
             <a href="#contributors" className="text-white/90 hover:text-white transition-colors">Earn Money</a>
@@ -60,16 +64,16 @@ export const Navigation = () => {
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className="text-white hover:bg-white/10"
                   onClick={() => navigate("/dashboard")}
                 >
                   <User className="h-4 w-4 mr-2" />
                   Dashboard
                 </Button>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className="text-white hover:bg-white/10"
                   onClick={handleLogout}
                 >
@@ -79,15 +83,15 @@ export const Navigation = () => {
               </>
             ) : (
               <>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   className="text-white hover:bg-white/10"
                   onClick={() => setLoginOpen(true)}
                 >
                   Sign In
                 </Button>
-                <Button 
-                  variant="default" 
+                <Button
+                  variant="default"
                   className="bg-white text-black hover:bg-white/90"
                   onClick={handleDashboard}
                 >
@@ -97,9 +101,9 @@ export const Navigation = () => {
             )}
           </div>
 
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             className="md:hidden text-white hover:bg-white/10"
             aria-label="Open menu"
             aria-expanded={mobileOpen}
@@ -109,7 +113,7 @@ export const Navigation = () => {
           </Button>
         </div>
       </div>
-      
+
       {/* Mobile menu panel */}
       <div className={`md:hidden ${mobileOpen ? "block" : "hidden"}`}>
         <div className="relative container mx-auto px-4 pb-4">
@@ -122,16 +126,16 @@ export const Navigation = () => {
               <div className="h-px bg-white/10 my-2"></div>
               {user ? (
                 <>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className="justify-start text-white hover:bg-white/10"
                     onClick={handleDashboard}
                   >
                     <User className="h-4 w-4 mr-2" />
                     Dashboard
                   </Button>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className="justify-start text-white hover:bg-white/10"
                     onClick={handleLogout}
                   >
@@ -141,15 +145,15 @@ export const Navigation = () => {
                 </>
               ) : (
                 <>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     className="justify-start text-white hover:bg-white/10"
                     onClick={() => { setLoginOpen(true); setMobileOpen(false); }}
                   >
                     Sign In
                   </Button>
-                  <Button 
-                    variant="default" 
+                  <Button
+                    variant="default"
                     className="justify-center bg-white text-black hover:bg-white/90"
                     onClick={handleDashboard}
                   >
@@ -161,7 +165,7 @@ export const Navigation = () => {
           </div>
         </div>
       </div>
-      
+
       {/* Login Dialog */}
       <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
     </nav>

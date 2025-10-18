@@ -5,15 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import logo from "@/assets/logo.png";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { 
-  LayoutDashboard, 
-  ListTodo, 
-  DollarSign, 
-  Settings, 
-  HelpCircle, 
+import {
+  LayoutDashboard,
+  ListTodo,
+  DollarSign,
+  Settings,
+  HelpCircle,
   LogOut,
   User,
   Clock,
@@ -76,7 +77,7 @@ const EarningsView = () => (
           <DollarSign className="h-8 w-8 text-green-600" />
         </div>
       </Card>
-      
+
       <Card className="p-6">
         <div className="flex items-center justify-between">
           <div>
@@ -86,7 +87,7 @@ const EarningsView = () => (
           <Calendar className="h-8 w-8 text-blue-600" />
         </div>
       </Card>
-      
+
       <Card className="p-6">
         <div className="flex items-center justify-between">
           <div>
@@ -163,9 +164,8 @@ const AchievementsView = () => (
         return (
           <Card key={index} className={`p-6 ${achievement.unlocked ? 'border-green-200 bg-green-50' : 'opacity-60'}`}>
             <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                achievement.unlocked ? 'bg-green-100' : 'bg-muted'
-              }`}>
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center ${achievement.unlocked ? 'bg-green-100' : 'bg-muted'
+                }`}>
                 <Icon className={`h-6 w-6 ${achievement.unlocked ? 'text-green-600' : 'text-muted-foreground'}`} />
               </div>
               <div>
@@ -520,8 +520,8 @@ const Dashboard = () => {
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
             <div className="space-y-3">
-              <Button 
-                className="w-full justify-start" 
+              <Button
+                className="w-full justify-start"
                 onClick={() => {
                   setActiveTab("tasks");
                   setSidebarOpen(false);
@@ -530,8 +530,8 @@ const Dashboard = () => {
                 <ListTodo className="mr-2 h-4 w-4" />
                 Browse Available Tasks
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="w-full justify-start"
                 onClick={() => {
                   setActiveTab("earnings");
@@ -541,8 +541,8 @@ const Dashboard = () => {
                 <DollarSign className="mr-2 h-4 w-4" />
                 View Earnings
               </Button>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="w-full justify-start"
                 onClick={() => {
                   setActiveTab("analytics");
@@ -613,8 +613,11 @@ const Dashboard = () => {
       {/* Mobile Header */}
       <div className="lg:hidden flex items-center justify-between p-4 bg-card border-b">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg"></div>
-          <span className="text-xl font-bold">AIDESK SPACE</span>
+          <img
+            src={logo}
+            alt="Aidesk Logo"
+            className="h-10 w-auto object-contain"
+          />
         </div>
         <Button
           variant="ghost"
@@ -627,14 +630,18 @@ const Dashboard = () => {
 
       <div className="flex">
         {/* Sidebar */}
-        <div className={`w-64 bg-card border-r min-h-screen transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 fixed lg:static z-50 lg:z-auto`}>
+        <div className={`w-64 bg-card border-r min-h-screen transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } lg:translate-x-0 fixed lg:static z-50 lg:z-auto`}>
           <div className="p-6">
             {/* Logo */}
             <div className="flex items-center gap-2 mb-8">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg"></div>
-              <span className="text-xl font-bold">AIDESK SPACE</span>
+              <div className="flex items-center gap-2">
+                <img
+                  src={logo}
+                  alt="Aidesk Logo"
+                  className="h-10 w-auto object-contain"
+                />
+              </div>
             </div>
 
             {/* User Profile */}
@@ -658,11 +665,10 @@ const Dashboard = () => {
                     setActiveTab(item.id);
                     setSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
-                    activeTab === item.id
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-muted"
-                  }`}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${activeTab === item.id
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted"
+                    }`}
                 >
                   {item.icon}
                   <span>{item.label}</span>
@@ -680,9 +686,9 @@ const Dashboard = () => {
             {/* Logout */}
             <Button
               variant="ghost"
-              onClick={async () => { 
-                await logout(); 
-                navigate('/?login=1'); 
+              onClick={async () => {
+                await logout();
+                navigate('/?login=1');
                 setSidebarOpen(false);
               }}
               className="w-full justify-start gap-3"
@@ -699,12 +705,12 @@ const Dashboard = () => {
           {!user?.onboardingCompleted && (
             <OnboardingProgress />
           )}
-          
+
           {/* Page Content */}
           {renderContent()}
         </div>
       </div>
-      
+
       {/* Chatbot */}
       <Chatbot />
     </div>
