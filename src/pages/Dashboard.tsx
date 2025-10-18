@@ -408,7 +408,7 @@ const HelpView = () => (
             <Phone className="h-5 w-5 text-primary" />
             <div>
               <p className="font-medium">Phone Support</p>
-              <p className="text-sm text-muted-foreground">+1 (555) 123-4567</p>
+              <p className="text-sm text-muted-foreground">+1 9715160108</p>
             </div>
           </div>
           <Button className="w-full">

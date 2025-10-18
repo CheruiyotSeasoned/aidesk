@@ -44,7 +44,7 @@ const mockTasks: Task[] = [
     estimatedTime: "3-6 hours",
     availableSlots: 75,
     requirements: ["Medical background preferred", "English proficiency"],
-    locked: true,
+    locked: false,
     completed: false,
   },
   {
@@ -70,7 +70,7 @@ const mockTasks: Task[] = [
     estimatedTime: "4-8 hours",
     availableSlots: 25,
     requirements: ["3D modeling experience", "Blender/Maya skills"],
-    locked: true,
+    locked: false,
     completed: false,
   },
 ];
