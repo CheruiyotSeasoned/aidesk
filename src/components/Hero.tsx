@@ -1,156 +1,161 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle2, Play, Users, Building2, Zap } from "lucide-react";
+import { CheckCircle2, Play, Users, Building2, Zap } from "lucide-react";
 import { AvailableTasksDialog } from "@/components/AvailableTasksDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import logo from "@/assets/logo.png"; // ✅ your logo
+import heroFallback from "@/assets/hero-fallback.png";
 
 export const Hero = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [videoLoaded, setVideoLoaded] = useState(false);
 
   const handleEnterpriseClick = () => {
-    // Scroll to enterprise section or open contact form
-    const enterpriseSection = document.getElementById('enterprise');
-    if (enterpriseSection) {
-      enterpriseSection.scrollIntoView({ behavior: 'smooth' });
-    }
+    const section = document.getElementById("enterprise");
+    if (section) section.scrollIntoView({ behavior: "smooth" });
   };
 
   const handleWatchDemo = () => {
-    // Open demo video or scroll to demo section
-    const demoSection = document.getElementById('demo');
-    if (demoSection) {
-      demoSection.scrollIntoView({ behavior: 'smooth' });
-    }
+    const section = document.getElementById("demo");
+    if (section) section.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
-    <section className="relative min-h-screen flex items-center overflow-hidden">
-      {/* Background Video/GIF Container */}
-      <div className="absolute inset-0 z-0">
-        {/* Video Background */}
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="w-full h-full object-cover"
-        >
-          <source src="/hero-bg.mp4" type="video/mp4" />
-          {/* Fallback for browsers that don't support video */}
-          <img 
-            src="/hero-bg.gif" 
-            alt="AI Background" 
-            className="w-full h-full object-cover"
-          />
-        </video>
-        
-        {/* Advanced Tech Wave Background */}
-        <div className="w-full h-full relative overflow-hidden">
-          {/* Base gradient background */}
-          <div className="tech-wave"></div>
-          
-          {/* Wave layers */}
-          <div className="wave-layer wave1"></div>
-          <div className="wave-layer wave2"></div>
-          <div className="wave-layer wave3"></div>
-          
-          {/* Data particles */}
-          <div className="data-particle particle1"></div>
-          <div className="data-particle particle2"></div>
-          <div className="data-particle particle3"></div>
-          <div className="data-particle particle4"></div>
-          <div className="data-particle particle5"></div>
-        </div>
-        
-        {/* Translucent Overlay */}
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
-        
-        {/* Gradient Overlay for better text readability */}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-black/30 to-black/60"></div>
+    <section className="relative min-h-screen flex items-center overflow-hidden bg-black text-white">
+      {/* ✅ Fallback image (visible before video loads) */}
+      <img
+        src={heroFallback}
+        alt="Hero background fallback"
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+          videoLoaded ? "opacity-0" : "opacity-100"
+        }`}
+        loading="eager"
+      />
+
+      {/* ✅ Background video */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+          videoLoaded ? "opacity-100" : "opacity-0"
+        }`}
+        onLoadedData={() => setVideoLoaded(true)}
+      >
+        <source src="/hero-bg.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+
+      {/* ✅ Instant-loading logo */}
+      <div className="absolute top-6 left-6 z-20 flex items-center gap-2">
+        <img
+          src={logo}
+          alt="Aidesk Logo"
+          className="w-16 h-16 object-contain"
+          loading="eager"
+        />
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 w-full pt-16 pb-16 sm:pt-20 sm:pb-20 px-4">
+      {/* ✅ Hero content */}
+      <div className="relative z-20 w-full pt-16 pb-16 sm:pt-20 sm:pb-20 px-4">
         <div className="container mx-auto">
           <div className="flex items-center justify-center">
-            <div className="text-center space-y-6 sm:space-y-8 text-white max-w-4xl">
-              {/* Status Badge */}
-              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-3 py-1.5 sm:px-4 sm:py-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-white font-semibold text-xs sm:text-sm">🚀 Live Platform - Join 500K+ Contributors</span>
+            <div className="text-center space-y-6 sm:space-y-8 max-w-4xl">
+              
+              {/* Live badge */}
+              <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-2 backdrop-blur-md">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <span className="font-semibold text-sm">
+                  🚀 Live Platform – Join 500K+ Contributors
+                </span>
               </div>
-              
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight">
-                Your One-Stop Partner for
-                <span className="bg-gradient-hero bg-clip-text text-transparent"> AI Excellence</span>
+
+              {/* Title */}
+              <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-tight">
+                Your One-Stop Partner for{" "}
+                <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                  AI Excellence
+                </span>
               </h1>
-              
-              <p className="text-base sm:text-lg md:text-xl text-white/90 leading-relaxed max-w-3xl mx-auto px-4">
-                <strong>For Enterprises:</strong> Build, train, and deploy AI models with the world's largest high-quality skill network.<br/>
-                <strong>For Contributors:</strong> Earn competitive pay working on meaningful AI projects from anywhere.
+
+              {/* Description */}
+              <p className="text-base sm:text-lg md:text-xl text-white/90 leading-relaxed max-w-3xl mx-auto">
+                <strong>For Enterprises:</strong> Build, train, and deploy AI models
+                with the world’s largest high-quality skill network.
+                <br />
+                <strong>For Contributors:</strong> Earn competitive pay working on
+                meaningful AI projects from anywhere.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 max-w-2xl mx-auto px-4">
+              {/* Features */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 max-w-2xl mx-auto">
                 <div className="flex items-center gap-2 text-sm sm:text-base">
                   <CheckCircle2 className="h-5 w-5 text-green-400" />
-                  <span className="text-white">Data labeling & collection at enterprise scale</span>
+                  <span>Data labeling & collection at enterprise scale</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm sm:text-base">
                   <CheckCircle2 className="h-5 w-5 text-green-400" />
-                  <span className="text-white">Global talent network with verified expertise</span>
+                  <span>Global talent network with verified expertise</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm sm:text-base">
                   <CheckCircle2 className="h-5 w-5 text-green-400" />
-                  <span className="text-white">End-to-end AI development lifecycle support</span>
+                  <span>End-to-end AI development lifecycle support</span>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4">
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center mt-4">
                 <AvailableTasksDialog />
-                <Button 
-                  variant="outline" 
-                  size="lg" 
-                  className="text-sm sm:text-base bg-white text-black hover:bg-white/90 shadow-lg"
+
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="bg-white text-black hover:bg-white/90 shadow-lg"
                   onClick={handleEnterpriseClick}
                 >
-                  <Building2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  <Building2 className="mr-2 h-5 w-5" />
                   Enterprise Solutions
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  size="lg" 
-                  className="text-sm sm:text-base text-white border-white/20 hover:bg-white/10 backdrop-blur-sm"
+
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  className="text-white border border-white/30 hover:bg-white/10 backdrop-blur-sm"
                   onClick={handleWatchDemo}
                 >
-                  <Play className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  <Play className="mr-2 h-5 w-5" />
                   Watch Demo
                 </Button>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-8 pt-4 px-4">
+              {/* Stats */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-8 pt-6">
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-2 mb-1">
-                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />
-                    <p className="text-2xl sm:text-3xl font-bold text-white">500K+</p>
+                    <Users className="h-5 w-5 text-blue-400" />
+                    <p className="text-3xl font-bold">500K+</p>
                   </div>
-                  <p className="text-xs sm:text-sm text-white/70">Global Contributors</p>
+                  <p className="text-sm text-white/70">Global Contributors</p>
                 </div>
-                <div className="hidden sm:block w-px h-8 sm:h-12 bg-white/30"></div>
+                <div className="hidden sm:block w-px h-10 bg-white/30"></div>
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-2 mb-1">
-                    <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400" />
-                    <p className="text-2xl sm:text-3xl font-bold text-white">1000+</p>
+                    <Building2 className="h-5 w-5 text-purple-400" />
+                    <p className="text-3xl font-bold">1000+</p>
                   </div>
-                  <p className="text-xs sm:text-sm text-white/70">Enterprise Clients</p>
+                  <p className="text-sm text-white/70">Enterprise Clients</p>
                 </div>
-                <div className="hidden sm:block w-px h-8 sm:h-12 bg-white/30"></div>
+                <div className="hidden sm:block w-px h-10 bg-white/30"></div>
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-2 mb-1">
-                    <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
-                    <p className="text-2xl sm:text-3xl font-bold text-white">50M+</p>
+                    <Zap className="h-5 w-5 text-green-400" />
+                    <p className="text-3xl font-bold">50M+</p>
                   </div>
-                  <p className="text-xs sm:text-sm text-white/70">Data Points Processed</p>
+                  <p className="text-sm text-white/70">Data Points Processed</p>
                 </div>
               </div>
             </div>
