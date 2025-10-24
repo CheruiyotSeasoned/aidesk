@@ -1,14 +1,13 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Card } from "@/components/ui/card";
 import logo from "@/assets/logo.png";
 import { Separator } from "@/components/ui/separator";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   LayoutDashboard,
   ListTodo,
@@ -19,24 +18,21 @@ import {
   User,
   Clock,
   TrendingUp,
-  Lock,
   Award,
   Target,
   Calendar,
   BarChart3,
   FileText,
   Bell,
-  Star,
   CheckCircle2,
   AlertCircle,
-  ArrowUpRight,
   Phone,
   Mail,
   Users,
   Menu,
   X,
   Bot,
-  RefreshCw
+  Loader2
 } from "lucide-react";
 import { TasksList } from "@/components/TasksList";
 import { OnboardingProgress } from "@/components/OnboardingProgress";
@@ -157,7 +153,7 @@ const AchievementsView = () => (
         { title: "Earning Streak", description: "Earn money for 7 consecutive days", icon: TrendingUp, unlocked: false },
         { title: "Task Master", description: "Complete 100 tasks", icon: Award, unlocked: false },
         { title: "Speed Demon", description: "Complete a task in under 30 minutes", icon: Clock, unlocked: false },
-        { title: "Quality Expert", description: "Maintain 95%+ accuracy for 10 tasks", icon: Star, unlocked: false },
+        { title: "Quality Expert", description: "Maintain 95%+ accuracy for 10 tasks", icon: CheckCircle2, unlocked: false },
         { title: "Team Player", description: "Help 5 other contributors", icon: Users, unlocked: false },
       ].map((achievement, index) => {
         const Icon = achievement.icon;
@@ -449,11 +445,168 @@ const HelpView = () => (
   </div>
 );
 
+const DashboardOverview = ({ user, setActiveTab, setSidebarOpen }: any) => {
+  const stats = [
+    { label: "Total Earnings", value: "$0.00", icon: DollarSign, color: "text-green-600", change: "+0%" },
+    { label: "Tasks Completed", value: "0", icon: TrendingUp, color: "text-blue-600", change: "+0" },
+    { label: "Hours Worked", value: "0", icon: Clock, color: "text-purple-600", change: "+0h" },
+    { label: "Current Streak", value: "0 days", icon: Target, color: "text-orange-600", change: "Start today!" },
+  ];
+
+  const recentActivities = [
+    { type: "task_completed", message: "Completed 'Image Classification' task", time: "2 hours ago", icon: CheckCircle2 },
+    { type: "earnings", message: "Earned $15.50 from data labeling", time: "1 day ago", icon: DollarSign },
+    { type: "achievement", message: "Unlocked 'First Task' achievement", time: "2 days ago", icon: Award },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">Welcome back, {user?.name}!</h1>
+        <p className="text-muted-foreground">Here's your AIDESK SPACE overview</p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat, index) => {
+          const Icon = stat.icon;
+          return (
+            <Card key={index} className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.change}</p>
+                </div>
+                <Icon className={`h-8 w-8 ${stat.color}`} />
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
+          <div className="space-y-3">
+            <Button
+              className="w-full justify-start"
+              onClick={() => {
+                setActiveTab("tasks");
+                setSidebarOpen(false);
+              }}
+            >
+              <ListTodo className="mr-2 h-4 w-4" />
+              Browse Available Tasks
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => {
+                setActiveTab("earnings");
+                setSidebarOpen(false);
+              }}
+            >
+              <DollarSign className="mr-2 h-4 w-4" />
+              View Earnings
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={() => {
+                setActiveTab("analytics");
+                setSidebarOpen(false);
+              }}
+            >
+              <BarChart3 className="mr-2 h-4 w-4" />
+              View Analytics
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+          <div className="space-y-3">
+            {recentActivities.length > 0 ? (
+              recentActivities.map((activity, index) => {
+                const Icon = activity.icon;
+                return (
+                  <div key={index} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
+                    <Icon className="h-4 w-4 text-primary" />
+                    <div className="flex-1">
+                      <p className="text-sm">{activity.message}</p>
+                      <p className="text-xs text-muted-foreground">{activity.time}</p>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No activity yet. Complete your onboarding to get started!</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Notifications */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Bell className="h-5 w-5" />
+          <h3 className="text-lg font-semibold">Notifications</h3>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">Welcome to AIDESK SPACE!</p>
+              <p className="text-xs text-muted-foreground">Complete your profile to start earning</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <div className="flex-1">
+              <p className="text-sm font-medium">New tasks available</p>
+              <p className="text-xs text-muted-foreground">5 new tasks matching your skills</p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
 const Dashboard = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Protected route - redirect to home if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/?login=1');
+    }
+  }, [user, loading, navigate]);
+
+  // Show loading state while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render dashboard if not authenticated
+  if (!user) {
+    return null;
+  }
 
   const renderContent = () => {
     switch (activeTab) {

@@ -1,15 +1,9 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { 
-  signInWithEmailAndPassword, 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged,
-  User as FirebaseUser,
-  createUserWithEmailAndPassword
-} from 'firebase/auth';
-import { auth, googleProvider } from '@/lib/firebase';
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import { supabase } from '@/lib/supabase';
 import { UserProfileService } from '@/services/userProfileService';
 import { UserProfile } from '@/lib/supabase';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { OnboardingData } from '@/lib/supabase';
 
 interface User {
   id: string;
@@ -54,9 +48,9 @@ interface AuthContextType {
   signup: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   loginWithGitHub: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateOnboardingProgress: (step: keyof User['onboardingProgress']) => Promise<void>;
-  completeOnboarding: (onboardingData?: any) => Promise<void>;
+  completeOnboarding: (onboardingData?: Partial<User>) => Promise<void>;
   refreshUserProfile: () => Promise<void>;
   loading: boolean;
 }
@@ -65,9 +59,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
 
@@ -78,393 +70,396 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const isMountedRef = useRef(true);
 
-  // Helper function to create basic user data from Firebase user
-  const createBasicUserData = (firebaseUser: FirebaseUser): User => {
-    return {
-      id: firebaseUser.uid,
-      email: firebaseUser.email || '',
-      name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-      avatar: firebaseUser.photoURL || undefined,
-      skills: [],
+  // 🧱 Convert Supabase profile to internal User format
+  const convertProfileToUser = (profile: UserProfile): User => ({
+    id: profile.user_id,
+    email: profile.email,
+    name: profile.name,
+    avatar: profile.avatar,
+    phone: profile.phone,
+    location: profile.location,
+    bio: profile.bio,
+    skills: profile.skills || [],
+    availability: profile.availability || { hours_per_week: 0, timezone: '', preferred_schedule: '' },
+    payment_details: profile.payment_details || { method: 'paypal' },
+    onboardingCompleted: profile.onboarding_completed,
+    onboardingProgress: {
+      personalInfo: profile.onboarding_progress?.personal_info || false,
+      skills: profile.onboarding_progress?.skills || false,
+      availability: profile.onboarding_progress?.availability || false,
+      payment: profile.onboarding_progress?.payment || false,
+      review: profile.onboarding_progress?.review || false,
+    },
+    approvalStatus: profile.approval_status,
+    approvalNotes: profile.approval_notes,
+  });
+
+  // 🧱 Create a basic user structure from Supabase user
+  const createBasicUserData = (supabaseUser: SupabaseUser): User => ({
+    id: supabaseUser.id,
+    email: supabaseUser.email || '',
+    name: supabaseUser.user_metadata?.full_name ||
+      supabaseUser.user_metadata?.name ||
+      supabaseUser.email?.split('@')[0] ||
+      'User',
+    avatar: supabaseUser.user_metadata?.avatar_url ||
+      supabaseUser.user_metadata?.picture ||
+      undefined,
+    skills: [],
+    availability: { hours_per_week: 0, timezone: '', preferred_schedule: '' },
+    payment_details: { method: 'paypal' },
+    onboardingCompleted: false,
+    onboardingProgress: {
+      personalInfo: false,
+      skills: false,
+      availability: false,
+      payment: false,
+      review: false,
+    },
+    approvalStatus: 'pending',
+  });
+
+  // 🧱 Create user profile in Supabase if not found
+  const createUserProfile = async (supabaseUser: SupabaseUser): Promise<User> => {
+    const profileData = {
+      user_id: supabaseUser.id,
+      email: supabaseUser.email || '',
+      name: supabaseUser.user_metadata?.full_name ||
+        supabaseUser.user_metadata?.name ||
+        supabaseUser.email?.split('@')[0] ||
+        'User',
+      avatar: supabaseUser.user_metadata?.avatar_url ||
+        supabaseUser.user_metadata?.picture,
+      phone: undefined,
+      location: undefined,
+      bio: undefined,
+      skills: [] as string[],
       availability: {
         hours_per_week: 0,
         timezone: '',
         preferred_schedule: ''
       },
       payment_details: {
-        method: 'paypal'
+        method: 'paypal' as const
       },
-      onboardingCompleted: false,
-      onboardingProgress: {
-        personalInfo: false,
+      onboarding_completed: false,
+      onboarding_progress: {
+        personal_info: false,
         skills: false,
         availability: false,
         payment: false,
         review: false,
       },
-      approvalStatus: 'pending',
+      approval_status: 'pending' as const,
+      approval_notes: undefined,
     };
-  };
 
-  // Helper function to create a new user profile in Supabase
-  const createUserProfile = async (firebaseUser: FirebaseUser): Promise<User> => {
     try {
-      console.log('Creating new profile for user:', firebaseUser.uid);
-      const newProfile = await UserProfileService.upsertProfile(firebaseUser.uid, {
-        user_id: firebaseUser.uid,
-        email: firebaseUser.email || '',
-        name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-        avatar: firebaseUser.photoURL || undefined,
-        skills: [],
-        availability: {
-          hours_per_week: 0,
-          timezone: '',
-          preferred_schedule: ''
-        },
-        payment_details: {
-          method: 'paypal'
-        },
-        onboarding_completed: false,
-        onboarding_progress: {
-          personal_info: false,
-          skills: false,
-          availability: false,
-          payment: false,
-          review: false,
-        },
-        approval_status: 'pending',
-      });
-
-      console.log('Profile created successfully:', newProfile);
-
-      return {
-        id: newProfile.user_id,
-        email: newProfile.email,
-        name: newProfile.name,
-        avatar: newProfile.avatar,
-        phone: newProfile.phone,
-        location: newProfile.location,
-        bio: newProfile.bio,
-        skills: newProfile.skills || [],
-        availability: newProfile.availability || {
-          hours_per_week: 0,
-          timezone: '',
-          preferred_schedule: ''
-        },
-        payment_details: newProfile.payment_details || {
-          method: 'paypal'
-        },
-        onboardingCompleted: newProfile.onboarding_completed,
-        onboardingProgress: {
-          personalInfo: newProfile.onboarding_progress?.personal_info || false,
-          skills: newProfile.onboarding_progress?.skills || false,
-          availability: newProfile.onboarding_progress?.availability || false,
-          payment: newProfile.onboarding_progress?.payment || false,
-          review: newProfile.onboarding_progress?.review || false,
-        },
-        approvalStatus: newProfile.approval_status,
-        approvalNotes: newProfile.approval_notes,
-      };
+      const newProfile = await UserProfileService.upsertProfile(profileData);
+      return convertProfileToUser(newProfile);
     } catch (error) {
-      console.error('Error creating user profile in Supabase:', error);
-      // Return basic user data if profile creation fails
-      return createBasicUserData(firebaseUser);
+      console.error('Profile creation failed, fallback to basic user:', error);
+      return createBasicUserData(supabaseUser);
     }
   };
 
-  // Convert Supabase profile to User format
-  const convertProfileToUser = (profile: UserProfile): User => {
-    return {
-      id: profile.user_id,
-      email: profile.email,
-      name: profile.name,
-      avatar: profile.avatar,
-      phone: profile.phone,
-      location: profile.location,
-      bio: profile.bio,
-      skills: profile.skills || [],
-      availability: profile.availability || {
-        hours_per_week: 0,
-        timezone: '',
-        preferred_schedule: ''
-      },
-      payment_details: profile.payment_details || {
-        method: 'paypal'
-      },
-      onboardingCompleted: profile.onboarding_completed,
-      onboardingProgress: {
-        personalInfo: profile.onboarding_progress?.personal_info || false,
-        skills: profile.onboarding_progress?.skills || false,
-        availability: profile.onboarding_progress?.availability || false,
-        payment: profile.onboarding_progress?.payment || false,
-        review: profile.onboarding_progress?.review || false,
-      },
-      approvalStatus: profile.approval_status,
-      approvalNotes: profile.approval_notes,
-    };
+  // 💾 Sync user data to localStorage
+  const syncUserToStorage = (userData: User | null) => {
+    if (userData) {
+      localStorage.setItem('user', JSON.stringify(userData));
+    } else {
+      localStorage.removeItem('user');
+    }
   };
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        // User is signed in - try to get profile from Supabase first
-        try {
-          console.log('Fetching profile for user:', firebaseUser.uid);
-          const profile = await UserProfileService.getProfile(firebaseUser.uid);
-          
-          if (profile) {
-            // Profile exists, convert and use it
-            console.log('Profile found:', profile);
-            const userData = convertProfileToUser(profile);
-            setUser(userData);
-            localStorage.setItem('user', JSON.stringify(userData));
-          } else {
-            // Profile doesn't exist, create one
-            console.log('No profile found, creating new profile...');
-            const userData = await createUserProfile(firebaseUser);
-            setUser(userData);
-            localStorage.setItem('user', JSON.stringify(userData));
-          }
-        } catch (error: any) {
-          console.error('Error in profile handling:', error);
-          
-          // Check if it's the "0 rows" PGRST116 error
-          if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
-            console.log('PGRST116 error detected, creating new profile...');
-            const userData = await createUserProfile(firebaseUser);
-            setUser(userData);
-            localStorage.setItem('user', JSON.stringify(userData));
-          } else {
-            // For other errors, fallback to basic user data
-            console.log('Using fallback basic user data');
-            const userData = createBasicUserData(firebaseUser);
-            setUser(userData);
-            localStorage.setItem('user', JSON.stringify(userData));
-          }
-        }
+  // 🧠 Listen to Supabase auth changes
+ useEffect(() => {
+  let isMounted = true;
+
+  const initAuth = async () => {
+    // Restore user from localStorage immediately
+    const cachedUser = localStorage.getItem('user');
+    if (cachedUser) {
+      try {
+        const parsedUser = JSON.parse(cachedUser);
+        setUser(parsedUser);
+        // ✅ Prevent dashboard from staying in loading state forever
+        setLoading(false);
+      } catch {
+        localStorage.removeItem('user');
+        setLoading(false);
+      }
+    } else {
+      // ✅ If no cached user, stop loading
+      setLoading(false);
+    }
+
+    // Then verify Supabase session silently in the background
+    const { data: { session } } = await supabase.auth.getSession();
+    if (isMounted && session?.user) {
+      loadUserProfile(session.user);
+    }
+
+    // Listen for auth changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        loadUserProfile(session.user);
       } else {
-        // User is signed out
-        console.log('User signed out');
         setUser(null);
         localStorage.removeItem('user');
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      isMounted = false;
+      listener.subscription.unsubscribe();
+    };
+  };
 
+  initAuth();
+}, []);
+
+
+  // 🔄 Load user profile from Supabase
+  const loadUserProfile = async (supabaseUser: SupabaseUser) => {
+    try {
+      let profile = await UserProfileService.getProfile(supabaseUser.id);
+
+      if (!isMountedRef.current) return;
+
+      if (!profile) {
+        const userData = await createUserProfile(supabaseUser);
+        setUser(userData);
+        syncUserToStorage(userData);
+      } else {
+        const userData = convertProfileToUser(profile);
+        setUser(userData);
+        syncUserToStorage(userData);
+      }
+    } catch (error: any) {
+      if (!isMountedRef.current) return;
+
+      if (error?.code === 'PGRST116') {
+        const userData = await createUserProfile(supabaseUser);
+        setUser(userData);
+        syncUserToStorage(userData);
+      } else {
+        console.error('Auth profile sync error:', error);
+        const fallback = createBasicUserData(supabaseUser);
+        setUser(fallback);
+        syncUserToStorage(fallback);
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // ✨ Auth Methods
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle updating the user state
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
+      // Auth state change listener will handle loading state
     } catch (error) {
-      console.error('Login error:', error);
-      throw error;
-    } finally {
       setLoading(false);
+      throw error;
     }
   };
 
   const signup = async (email: string, password: string) => {
     setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle updating the user state and creating profile
-      console.log('User created in Firebase:', userCredential.user.uid);
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (error) throw error;
+      // Auth state change listener will handle loading state
     } catch (error) {
-      console.error('Signup error:', error);
-      throw error;
-    } finally {
       setLoading(false);
+      throw error;
     }
   };
 
   const loginWithGoogle = async () => {
-    setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      console.log('Google login successful:', result.user.uid);
-      // onAuthStateChanged will handle updating the user state and creating profile if needed
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+        },
+      });
+      if (error) throw error;
+      // OAuth redirect happens, no need to manage loading
     } catch (error) {
-      console.error('Google login error:', error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
   const loginWithGitHub = async () => {
-    setLoading(true);
-    // Mock GitHub login
-    const mockUser: User = {
-      id: '1',
-      email: 'user@github.com',
-      name: 'GitHub User',
-      avatar: 'https://via.placeholder.com/150',
-      onboardingCompleted: false,
-      onboardingProgress: {
-        personalInfo: false,
-        skills: false,
-        availability: false,
-        payment: false,
-        review: false,
-      },
-      skills: [],
-      availability: {
-        hours_per_week: 0,
-        timezone: '',
-        preferred_schedule: ''
-      },
-      payment_details: {
-        method: 'paypal',
-        paypal_email: '',
-        bank_account_name: '',
-        bank_account_number: '',
-        bank_routing_number: '',
-        card_holder_name: '',
-        card_number: '',
-        card_expiry: '',
-        card_cvv: ''
-      },
-      approvalStatus: 'approved'
-    };
-    
-    setUser(mockUser);
-    localStorage.setItem('user', JSON.stringify(mockUser));
-    setLoading(false);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'github',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+      // OAuth redirect happens, no need to manage loading
+    } catch (error) {
+      throw error;
+    }
   };
 
   const logout = async () => {
     try {
-      await signOut(auth);
-      // onAuthStateChanged will handle clearing the user state
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
+      syncUserToStorage(null);
     } catch (error) {
       console.error('Logout error:', error);
+      throw error;
     }
   };
 
+  // 🧭 Onboarding updates
   const updateOnboardingProgress = async (step: keyof User['onboardingProgress']) => {
     if (!user) return;
-    
-    const updatedUser = {
+
+    const previousUser = { ...user };
+    const updatedProgress = { ...user.onboardingProgress, [step]: true };
+    const optimisticUser = {
       ...user,
-      onboardingProgress: {
-        ...user.onboardingProgress,
-        [step]: true,
-      },
+      onboardingProgress: updatedProgress,
     };
-    
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    
-    // Save progress to Supabase
+
+    // Optimistic update
+    setUser(optimisticUser);
+    syncUserToStorage(optimisticUser);
+
+    const supabaseStep = step === 'personalInfo' ? 'personal_info' : step;
+
     try {
-      const supabaseStep = step === 'personalInfo' ? 'personal_info' : step;
-      
-      // First, try to get the profile
-      try {
-        await UserProfileService.getProfile(user.id);
-        // Profile exists, update it
-        await UserProfileService.updateOnboardingProgress(user.id, {
-          [supabaseStep]: true
-        });
-      } catch (error: any) {
-        // If profile doesn't exist (PGRST116), create it first
-        if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
-          console.log('Profile not found, creating it before updating progress...');
-          
-          // Get current Firebase user to create profile
-          if (auth.currentUser) {
-            await createUserProfile(auth.currentUser);
-            // Now try to update again
-            await UserProfileService.updateOnboardingProgress(user.id, {
-              [supabaseStep]: true
-            });
-          }
-        } else {
-          throw error;
-        }
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+
+      let profile = await UserProfileService.getProfile(user.id).catch(() => null);
+      if (!profile && currentUser) {
+        await createUserProfile(currentUser);
       }
+
+      await UserProfileService.updateOnboardingProgress(user.id, { [supabaseStep]: true });
     } catch (error) {
-      console.error('Error updating onboarding progress in Supabase:', error);
+      console.error('Onboarding progress update failed:', error);
+      // Revert on error
+      setUser(previousUser);
+      syncUserToStorage(previousUser);
+      throw error;
     }
   };
 
-  const completeOnboarding = async (onboardingData?: any) => {
+  const completeOnboarding = async (onboardingData?: Partial<User>) => {
     if (!user) return;
-    
-    const updatedUser = {
-      ...user,
-      onboardingCompleted: true,
-    };
-    
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    
-    // Save complete onboarding data to Supabase
-    if (onboardingData) {
-      try {
-        // Check if profile exists first
-        try {
-          await UserProfileService.getProfile(user.id);
-          // Profile exists, update it
-          await UserProfileService.completeOnboarding(user.id, onboardingData);
-        } catch (error: any) {
-          // If profile doesn't exist (PGRST116), create it first
-          if (error?.code === 'PGRST116' || error?.message?.includes('0 rows')) {
-            console.log('Profile not found, creating it before completing onboarding...');
-            
-            if (auth.currentUser) {
-              // Create profile with onboarding data
-              await UserProfileService.upsertProfile(user.id, {
-                ...onboardingData,
-                onboarding_completed: true,
-                onboarding_progress: {
-                  personal_info: true,
-                  skills: true,
-                  availability: true,
-                  payment: true,
-                  review: true,
-                },
-                approval_status: 'pending',
-              });
-            }
-          } else {
-            throw error;
-          }
+
+    const previousUser = { ...user };
+
+    try {
+      const profile = await UserProfileService.getProfile(user.id);
+
+      if (profile) {
+        // Build complete OnboardingData with required fields
+        const onboardingUpdate: OnboardingData = {
+          name: onboardingData?.name || profile.name,
+          email: onboardingData?.email || profile.email,
+          phone: onboardingData?.phone || profile.phone,
+          location: onboardingData?.location || profile.location,
+          bio: onboardingData?.bio || profile.bio,
+          skills: onboardingData?.skills || profile.skills,
+          availability: onboardingData?.availability || profile.availability,
+          payment_details: onboardingData?.payment_details || profile.payment_details,
+        };
+
+        await UserProfileService.completeOnboarding(user.id, onboardingUpdate);
+      } else {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          await UserProfileService.upsertProfile({
+            user_id: currentUser.id,
+            email: onboardingData?.email || currentUser.email || '',
+            name: onboardingData?.name || currentUser.user_metadata?.full_name || 'User',
+            avatar: onboardingData?.avatar || currentUser.user_metadata?.avatar_url,
+            phone: onboardingData?.phone,
+            location: onboardingData?.location,
+            bio: onboardingData?.bio,
+            skills: onboardingData?.skills || [],
+            availability: onboardingData?.availability || {
+              hours_per_week: 0,
+              timezone: '',
+              preferred_schedule: ''
+            },
+            payment_details: onboardingData?.payment_details || {
+              method: 'paypal' as const
+            },
+            onboarding_completed: true,
+            onboarding_progress: {
+              personal_info: true,
+              skills: true,
+              availability: true,
+              payment: true,
+              review: true,
+            },
+            approval_status: 'pending' as const,
+            approval_notes: undefined,
+          });
         }
-      } catch (error) {
-        console.error('Error completing onboarding in Supabase:', error);
       }
+
+      // Update state after successful DB operation
+      const updatedUser = { ...user, onboardingCompleted: true };
+      setUser(updatedUser);
+      syncUserToStorage(updatedUser);
+    } catch (error) {
+      console.error('Complete onboarding error:', error);
+      // Revert on error
+      setUser(previousUser);
+      syncUserToStorage(previousUser);
+      throw error;
     }
   };
 
   const refreshUserProfile = async () => {
     if (!user) return;
-    
     try {
       const profile = await UserProfileService.getProfile(user.id);
       if (profile) {
         const userData = convertProfileToUser(profile);
         setUser(userData);
-        localStorage.setItem('user', JSON.stringify(userData));
+        syncUserToStorage(userData);
       }
     } catch (error: any) {
-      console.error('Error refreshing user profile:', error);
-      
-      // If PGRST116 error, try to create profile
-      if (error?.code === 'PGRST116' && auth.currentUser) {
-        const newUser = await createUserProfile(auth.currentUser);
-        setUser(newUser);
-        localStorage.setItem('user', JSON.stringify(newUser));
+      if (error?.code === 'PGRST116') {
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          const newUser = await createUserProfile(currentUser);
+          setUser(newUser);
+          syncUserToStorage(newUser);
+        }
+      } else {
+        console.error('Profile refresh failed:', error);
+        throw error;
       }
     }
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     login,
     signup,

@@ -1,13 +1,18 @@
 import { supabase, UserProfile, OnboardingData } from '@/lib/supabase';
 
 export class UserProfileService {
-  // Create or update user profile
-  static async upsertProfile(userId: string, data: Partial<UserProfile>) {
+  /**
+   * 🧭 Create or update user profile
+   */
+  static async upsertProfile(data: Partial<UserProfile>) {
+    if (!data.user_id) {
+      throw new Error('user_id is required to upsert profile');
+    }
+
     try {
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .upsert({
-          user_id: userId,
           ...data,
           updated_at: new Date().toISOString(),
         })
@@ -15,14 +20,16 @@ export class UserProfileService {
         .single();
 
       if (error) throw error;
-      return profile;
+      return profile as UserProfile;
     } catch (error) {
       console.error('Error upserting profile:', error);
       throw error;
     }
   }
 
-  // Get user profile by user ID
+  /**
+   * 🧭 Get user profile by user ID
+   */
   static async getProfile(userId: string): Promise<UserProfile | null> {
     try {
       const { data: profile, error } = await supabase
@@ -38,16 +45,19 @@ export class UserProfileService {
         }
         throw error;
       }
-      return profile;
+
+      return profile as UserProfile;
     } catch (error) {
       console.error('Error fetching profile:', error);
       throw error;
     }
   }
 
-  // Update onboarding progress
+  /**
+   * 🧭 Update onboarding progress
+   */
   static async updateOnboardingProgress(
-    userId: string, 
+    userId: string,
     progress: Partial<UserProfile['onboarding_progress']>
   ) {
     try {
@@ -62,14 +72,16 @@ export class UserProfileService {
         .single();
 
       if (error) throw error;
-      return profile;
+      return profile as UserProfile;
     } catch (error) {
       console.error('Error updating onboarding progress:', error);
       throw error;
     }
   }
 
-  // Complete onboarding
+  /**
+   * 🧭 Complete onboarding
+   */
   static async completeOnboarding(userId: string, onboardingData: OnboardingData) {
     try {
       const { data: profile, error } = await supabase
@@ -99,16 +111,18 @@ export class UserProfileService {
         .single();
 
       if (error) throw error;
-      return profile;
+      return profile as UserProfile;
     } catch (error) {
       console.error('Error completing onboarding:', error);
       throw error;
     }
   }
 
-  // Update approval status (admin function)
+  /**
+   * 🧭 Update approval status (admin)
+   */
   static async updateApprovalStatus(
-    userId: string, 
+    userId: string,
     status: UserProfile['approval_status'],
     notes?: string
   ) {
@@ -125,14 +139,16 @@ export class UserProfileService {
         .single();
 
       if (error) throw error;
-      return profile;
+      return profile as UserProfile;
     } catch (error) {
       console.error('Error updating approval status:', error);
       throw error;
     }
   }
 
-  // Get all profiles (admin function)
+  /**
+   * 🧭 Get all profiles (admin)
+   */
   static async getAllProfiles() {
     try {
       const { data: profiles, error } = await supabase
@@ -141,14 +157,16 @@ export class UserProfileService {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return profiles;
+      return profiles as UserProfile[];
     } catch (error) {
       console.error('Error fetching all profiles:', error);
       throw error;
     }
   }
 
-  // Get profiles by approval status
+  /**
+   * 🧭 Get profiles by approval status (admin)
+   */
   static async getProfilesByStatus(status: UserProfile['approval_status']) {
     try {
       const { data: profiles, error } = await supabase
@@ -158,10 +176,34 @@ export class UserProfileService {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return profiles;
+      return profiles as UserProfile[];
     } catch (error) {
       console.error('Error fetching profiles by status:', error);
       throw error;
     }
+  }
+
+  /**
+   * 🧭 Get session
+   */
+  static async getSession() {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) {
+      console.error('Session error:', error);
+      return null;
+    }
+    return session;
+  }
+
+  /**
+   * 🧭 Refresh session
+   */
+  static async refreshSession() {
+    const { data: { session }, error } = await supabase.auth.refreshSession();
+    if (error) {
+      console.error('Session refresh error:', error);
+      throw error;
+    }
+    return session;
   }
 }

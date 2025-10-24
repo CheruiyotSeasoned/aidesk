@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, CheckCircle2, User, Mail, MapPin, Briefcase, Lock, Eye, EyeOff, Shield, CreditCard, Building2, Zap, TrendingUp, DollarSign, Clock, AlertCircle, Info } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface OnboardingDialogProps {
@@ -19,11 +19,14 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
   const [showPassword, setShowPassword] = useState(false);
   const [verificationOpen, setVerificationOpen] = useState(false);
   const [verificationAcknowledged, setVerificationAcknowledged] = useState(false);
+  const verificationDialogRef = useRef<HTMLDivElement>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState("");
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -71,6 +74,8 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Clear validation errors when user starts typing
+    setValidationError(null);
     if (field === "paymentMethod") {
       setVerificationAcknowledged(false);
       setPaymentSuccess(false);
@@ -81,132 +86,187 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
     }
   };
 
+  // Validation function for each step
+  const validateStep = (step: number): { isValid: boolean; error: string | null } => {
+    switch (step) {
+      case 0:
+        if (!formData.email || !formData.password) {
+          return { isValid: false, error: "Please fill in all required fields" };
+        }
+        if (authMode === 'signup' && formData.password !== formData.confirmPassword) {
+          return { isValid: false, error: "Passwords do not match" };
+        }
+        if (formData.password.length < 6) {
+          return { isValid: false, error: "Password must be at least 6 characters" };
+        }
+        return { isValid: true, error: null };
+
+      case 1:
+        if (!formData.name || !formData.location) {
+          return { isValid: false, error: "Please fill in all required fields" };
+        }
+        return { isValid: true, error: null };
+
+      case 2:
+        if (!formData.experience || !formData.skills) {
+          return { isValid: false, error: "Please fill in your experience and skills" };
+        }
+        return { isValid: true, error: null };
+
+      case 3:
+        if (!formData.availability || !formData.hourlyRate) {
+          return { isValid: false, error: "Please fill in your availability and hourly rate" };
+        }
+        return { isValid: true, error: null };
+
+      case 4:
+        if (!formData.paymentMethod) {
+          return { isValid: false, error: "Please select a payment method" };
+        }
+        if (formData.paymentMethod === 'paypal') {
+          if (!formData.paypalEmail) {
+            return { isValid: false, error: "Please enter your PayPal email" };
+          }
+        }
+        if (formData.paymentMethod === 'bank') {
+          if (!formData.bankAccountName || !formData.bankAccountNumber || !formData.bankRoutingNumber) {
+            return { isValid: false, error: "Please fill in all bank details" };
+          }
+        }
+        return { isValid: true, error: null };
+
+      default:
+        return { isValid: true, error: null };
+    }
+  };
+
   const processPayPalVerification = async () => {
+    if (!formData.paypalEmail) {
+      setPaymentError("Please enter your PayPal email address");
+      return false;
+    }
+
     setPaymentProcessing(true);
     setPaymentError("");
 
     try {
-      // Simulate PayPal API integration
-      // In production, this would integrate with PayPal's REST API
-      const response = await fetch('/api/paypal/authorize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.paypalEmail,
-          amount: 5.00,
-          currency: 'USD',
-          description: 'AIDESK SPACE - Identity Verification'
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('PayPal verification failed');
+      // Load PayPal SDK if not already loaded
+      if (!(window as any).paypal) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://www.paypal.com/sdk/js?client-id=AVyQxF4MkVprgaE0nKYVzqKINgmOBtsq7An-iQCzyj_uC40UrsIi-yxz-Qz4X98RmnuWhPvq8oMp3glr&currency=USD&disable-funding=credit,card';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
       }
 
-      const data = await response.json();
-      
-      // Simulate successful authorization
+      // For demo purposes, simulate successful verification
+      // In production, use PayPal SDK to create an authorization
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       setPaymentSuccess(true);
+      setPaymentProcessing(false);
       return true;
     } catch (error) {
       setPaymentError("Failed to process PayPal verification. Please check your PayPal email and try again.");
-      return false;
-    } finally {
-      setPaymentProcessing(false);
-    }
-  };
-
-  const processPaystackVerification = async () => {
-    setPaymentProcessing(true);
-    setPaymentError("");
-
-    try {
-      // Initialize Paystack
-      const handler = (window as any).PaystackPop.setup({
-        key: 'pk_live_848d6a33281232fbeec49e656c9192255dba0452', // Replace with your Paystack public key
-        email: formData.email,
-        amount: 1, // 5 USD in cents (Paystack uses smallest currency unit)
-        currency: 'KES',
-        ref: 'AIDESK_VERIFY_' + Math.floor(Math.random() * 1000000000),
-        metadata: {
-          custom_fields: [
-            {
-              display_name: "Verification Type",
-              variable_name: "verification_type",
-              value: "Identity Verification"
-            }
-          ]
-        },
-        callback: function(response: any) {
-          // Verify the transaction on your backend
-          fetch('/api/paystack/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              reference: response.reference,
-              userId: user?.id
-            })
-          }).then(res => {
-            if (res.ok) {
-              setPaymentSuccess(true);
-              setPaymentProcessing(false);
-            } else {
-              throw new Error('Verification failed');
-            }
-          }).catch(() => {
-            setPaymentError("Failed to verify payment. Please try again.");
-            setPaymentProcessing(false);
-          });
-        },
-        onClose: function() {
-          setPaymentError("Payment verification was cancelled. Please complete the verification to continue.");
-          setPaymentProcessing(false);
-        }
-      });
-
-      handler.openIframe();
-      return true;
-    } catch (error) {
-      setPaymentError("Failed to initialize payment. Please ensure your card details are correct.");
       setPaymentProcessing(false);
       return false;
     }
   };
+  const getPaystackContainer = () => {
+    let container = document.getElementById("paystack-portal");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "paystack-portal";
+      container.style.position = "fixed";
+      container.style.top = "0";
+      container.style.left = "0";
+      container.style.width = "100%";
+      container.style.height = "100%";
+      container.style.zIndex = "9999"; // above everything
+      document.body.appendChild(container);
+    }
+    return container;
+  };
 
-  // Load Paystack script
-  useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://js.paystack.co/v1/inline.js';
-    script.async = true;
-    document.body.appendChild(script);
+const processPaystackVerification = async () => {
+  if (!formData.bankAccountName || !formData.bankAccountNumber) {
+    setPaymentError("Please fill in all bank details");
+    return false;
+  }
 
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
+  setPaymentProcessing(true);
+  setPaymentError("");
 
-  const handleAuth = async () => {
+  if (!verificationDialogRef.current) return false;
+
+  // Disable clicking or typing in dialog while Paystack popup is open
+  verificationDialogRef.current.style.pointerEvents = "none";
+
+  try {
+    if (!(window as any).PaystackPop) {
+      const script = document.createElement("script");
+      script.src = "https://js.paystack.co/v1/inline.js";
+      document.body.appendChild(script);
+      await new Promise((resolve) => (script.onload = resolve));
+    }
+
+    const handler = (window as any).PaystackPop.setup({
+      key: "pk_live_848d6a33281232fbeec49e656c9192255dba0452",
+      email: formData.email,
+      amount: 5 * 100,
+      currency: "USD",
+      ref: `AIDESK_VERIFY_${Date.now()}_${Math.floor(Math.random() * 1000000)}`,
+      metadata: {
+        custom_fields: [
+          { display_name: "Verification Type", variable_name: "verification_type", value: "Identity Verification" },
+          { display_name: "User Email", variable_name: "user_email", value: formData.email },
+        ],
+      },
+      callback: (response: any) => {
+        console.log("✅ Payment successful:", response);
+        setPaymentSuccess(true);
+        setPaymentProcessing(false);
+        verificationDialogRef.current!.style.pointerEvents = ""; // re-enable dialog
+      },
+      onClose: () => {
+        console.log("⚠️ Payment window closed");
+        setPaymentError("Payment verification was cancelled.");
+        setPaymentProcessing(false);
+        verificationDialogRef.current!.style.pointerEvents = ""; // re-enable dialog
+      },
+    });
+
+    handler.openIframe();
+    return true;
+  } catch (error: any) {
+    console.error("❌ Paystack error:", error);
+    setPaymentError(error.message || "Failed to initialize payment.");
+    setPaymentProcessing(false);
+    verificationDialogRef.current!.style.pointerEvents = ""; // re-enable on error
+    return false;
+  }
+};
+
+  const handleAuth = async (): Promise<boolean> => {
+    const validation = validateStep(0);
+    if (!validation.isValid) {
+      setAuthError(validation.error || "Validation failed");
+      return false;
+    }
+
     setAuthError("");
     setAuthLoading(true);
 
     try {
       if (authMode === 'signup') {
-        if (formData.password !== formData.confirmPassword) {
-          setAuthError("Passwords do not match");
-          setAuthLoading(false);
-          return;
-        }
-        if (formData.password.length < 6) {
-          setAuthError("Password must be at least 6 characters");
-          setAuthLoading(false);
-          return;
-        }
         await signup(formData.email, formData.password);
       } else {
         await login(formData.email, formData.password);
       }
-      
-      setCurrentStep(1);
+
+      return true; // ✅ Only return success — don’t set step here
     } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') {
         setAuthError("Email already registered. Try signing in instead.");
@@ -219,10 +279,12 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
       } else {
         setAuthError(error.message || "Authentication failed. Please try again.");
       }
+      return false;
     } finally {
       setAuthLoading(false);
     }
   };
+
 
   const handleGoogleLogin = async () => {
     setAuthError("");
@@ -245,53 +307,71 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
   };
 
   const nextStep = async () => {
+    // Clear previous errors
+    setValidationError(null);
+
+    // Handle authentication step
     if (currentStep === 0) {
-      handleAuth();
+      const success = await handleAuth();
+      if (success) {
+        setCurrentStep(1);
+      }
       return;
     }
-    
-    // Wrap updateOnboardingProgress calls in try-catch to handle missing profile gracefully
+
+    // Validate current step before proceeding
+    const validation = validateStep(currentStep);
+    if (!validation.isValid) {
+      setValidationError(validation.error);
+      return;
+    }
+
+    // Special handling for payment step
+    if (currentStep === 4) {
+      if (formData.paymentMethod === 'paypal' && !paymentSuccess) {
+        setVerificationOpen(true);
+        return;
+      }
+      if (formData.paymentMethod === 'bank' && !paymentSuccess) {
+        setVerificationOpen(true);
+        return;
+      }
+    }
+
+    // Update onboarding progress in database
     try {
       if (currentStep === 1) await updateOnboardingProgress('personalInfo');
       if (currentStep === 2) await updateOnboardingProgress('skills');
       if (currentStep === 3) await updateOnboardingProgress('availability');
-      if (currentStep === 4) {
-        // Check if payment verification is required and completed
-        if (formData.paymentMethod === 'paypal') {
-          if (!paymentSuccess) {
-            setVerificationOpen(true);
-            return;
-          }
-        } else if (formData.paymentMethod === 'bank') {
-          if (!paymentSuccess) {
-            setVerificationOpen(true);
-            return;
-          }
-        }
-        await updateOnboardingProgress('payment');
-      }
+      if (currentStep === 4) await updateOnboardingProgress('payment');
     } catch (error) {
-      // Silently handle the error - profile will be created on final submission
       console.log('Profile not yet created, will be initialized on completion');
     }
-    
-    if (currentStep < 5) setCurrentStep(currentStep + 1);
+
+    // Move to next step
+    if (currentStep < 5) {
+      console.log("Moving from step:", currentStep, "to", currentStep + 1);
+      setCurrentStep(currentStep + 1);
+    }
   };
 
   const prevStep = () => {
     // Don't allow going back to auth step if user is already authenticated
     if (currentStep > 1 || (currentStep === 1 && !user)) {
       setCurrentStep(currentStep - 1);
+      setValidationError(null);
     }
   };
 
   const handleSubmit = async () => {
+    setSubmitError(null);
+
     try {
       // Prepare onboarding data for Supabase
       const onboardingData = {
         name: formData.name || user?.name || '',
         email: formData.email || user?.email || '',
-        phone: formData.location, // Using location field for phone as per current form
+        phone: formData.location,
         location: formData.location,
         bio: formData.bio,
         skills: formData.skills ? formData.skills.split(',').map(s => s.trim()) : [],
@@ -313,25 +393,52 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
         }
       };
 
-      await updateOnboardingProgress('review');
-      await completeOnboarding(onboardingData);
-      onOpenChange(false);
-      // Reset to appropriate step based on auth status
-      setCurrentStep(user ? 1 : 0);
-    } catch (error) {
-      console.error('Error completing onboarding:', error);
-      // Still close the dialog but show error
-      onOpenChange(false);
-      setCurrentStep(user ? 1 : 0);
+      // First update the onboarding progress
+      try {
+        await updateOnboardingProgress('review');
+      } catch (error: any) {
+        console.error('Error updating onboarding progress:', error);
+      }
+
+      // Complete onboarding with error handling
+      try {
+        await completeOnboarding(onboardingData);
+
+        // Success - close dialog and reset
+        onOpenChange(false);
+        setCurrentStep(user ? 1 : 0);
+        setSubmitError(null);
+        setValidationError(null);
+      } catch (error: any) {
+        console.error('Error completing onboarding:', error);
+
+        let errorMessage = 'Failed to complete onboarding. Please try again.';
+
+        if (error.code === 'PGRST301') {
+          errorMessage = 'Database connection error. Please try again later.';
+        } else if (error.code === '23505') {
+          errorMessage = 'A profile already exists for this account.';
+        } else if (error.code === '23503') {
+          errorMessage = 'Invalid user reference. Please sign in again.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+
+        setSubmitError(errorMessage);
+      }
+    } catch (error: any) {
+      console.error('Unexpected error during submission:', error);
+      setSubmitError('An unexpected error occurred. Please try again.');
     }
   };
 
   const handleClose = () => {
     onOpenChange(false);
-    // Only reset to step 0 if user is not authenticated
     if (!user) {
       setCurrentStep(0);
     }
+    setValidationError(null);
+    setSubmitError(null);
   };
 
   const renderStepContent = () => {
@@ -341,9 +448,8 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
           <div className="space-y-6">
             <div className="flex justify-center gap-2 p-1 bg-muted rounded-lg">
               <button
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                  authMode === 'signin' ? 'bg-background shadow-sm' : 'text-muted-foreground'
-                }`}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${authMode === 'signin' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                  }`}
                 onClick={() => {
                   setAuthMode('signin');
                   setAuthError("");
@@ -352,9 +458,8 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
                 Sign In
               </button>
               <button
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                  authMode === 'signup' ? 'bg-background shadow-sm' : 'text-muted-foreground'
-                }`}
+                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${authMode === 'signup' ? 'bg-background shadow-sm' : 'text-muted-foreground'
+                  }`}
                 onClick={() => {
                   setAuthMode('signup');
                   setAuthError("");
@@ -480,6 +585,12 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
       case 1:
         return (
           <div className="space-y-4">
+            {validationError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{validationError}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="name">Full Name *</Label>
               <Input
@@ -516,6 +627,12 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
       case 2:
         return (
           <div className="space-y-4">
+            {validationError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{validationError}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="experience">Years of Experience *</Label>
               <Input
@@ -551,6 +668,12 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
       case 3:
         return (
           <div className="space-y-4">
+            {validationError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{validationError}</AlertDescription>
+              </Alert>
+            )}
             <div className="grid grid-cols-3 gap-3 mb-4">
               <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
                 <Clock className="h-5 w-5 text-green-600 mx-auto mb-1" />
@@ -597,6 +720,12 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
       case 4:
         return (
           <div className="space-y-6">
+            {validationError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{validationError}</AlertDescription>
+              </Alert>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
@@ -628,11 +757,10 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
                   <button
                     type="button"
                     onClick={() => handleInputChange("paymentMethod", "paypal")}
-                    className={`p-4 border-2 rounded-lg transition-all ${
-                      formData.paymentMethod === 'paypal' 
-                        ? 'border-primary bg-primary/5' 
-                        : 'border-muted hover:border-primary/50'
-                    }`}
+                    className={`p-4 border-2 rounded-lg transition-all ${formData.paymentMethod === 'paypal'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted hover:border-primary/50'
+                      }`}
                   >
                     <CreditCard className="h-6 w-6 mx-auto mb-2 text-primary" />
                     <p className="text-sm font-medium">PayPal</p>
@@ -641,11 +769,10 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
                   <button
                     type="button"
                     onClick={() => handleInputChange("paymentMethod", "bank")}
-                    className={`p-4 border-2 rounded-lg transition-all ${
-                      formData.paymentMethod === 'bank' 
-                        ? 'border-primary bg-primary/5' 
-                        : 'border-muted hover:border-primary/50'
-                    }`}
+                    className={`p-4 border-2 rounded-lg transition-all ${formData.paymentMethod === 'bank'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-muted hover:border-primary/50'
+                      }`}
                   >
                     <Building2 className="h-6 w-6 mx-auto mb-2 text-primary" />
                     <p className="text-sm font-medium">Bank Transfer</p>
@@ -802,6 +929,13 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
       case 5:
         return (
           <div className="space-y-6">
+            {submitError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{submitError}</AlertDescription>
+              </Alert>
+            )}
+
             <div className="grid gap-3">
               <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
                 <User className="h-5 w-5 text-blue-600 flex-shrink-0" />
@@ -931,11 +1065,10 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
               {steps.filter(s => s.id > 0).map((step, index) => (
                 <div key={step.id} className="flex items-center">
                   <div
-                    className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-all ${
-                      currentStep >= step.id
-                        ? "bg-primary border-primary text-primary-foreground shadow-md"
-                        : "border-muted-foreground text-muted-foreground"
-                    }`}
+                    className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-all ${currentStep >= step.id
+                      ? "bg-primary border-primary text-primary-foreground shadow-md"
+                      : "border-muted-foreground text-muted-foreground"
+                      }`}
                   >
                     {currentStep > step.id ? (
                       <CheckCircle2 className="h-4 w-4" />
@@ -944,9 +1077,8 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
                     )}
                   </div>
                   {index < steps.filter(s => s.id > 0).length - 1 && (
-                    <div className={`w-8 sm:w-12 h-px mx-2 transition-all ${
-                      currentStep > step.id ? 'bg-primary' : 'bg-muted-foreground/30'
-                    }`} />
+                    <div className={`w-8 sm:w-12 h-px mx-2 transition-all ${currentStep > step.id ? 'bg-primary' : 'bg-muted-foreground/30'
+                      }`} />
                   )}
                 </div>
               ))}
@@ -998,7 +1130,10 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
       </Dialog>
 
       <Dialog open={verificationOpen} onOpenChange={setVerificationOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-lg">
+        <DialogContent
+          ref={verificationDialogRef}
+          className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto"
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <div className="p-2 bg-amber-100 rounded-lg">
@@ -1010,8 +1145,8 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
               Understanding your one-time verification charge
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4">
+
+          <div className="space-y-4 pb-4">
             <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
               <p className="text-sm font-semibold text-blue-900 mb-2">Why do we need this?</p>
               <p className="text-xs text-blue-800">
@@ -1075,7 +1210,7 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
                 <div>
                   <p className="text-xs font-semibold text-green-900 mb-1">Your Privacy Matters</p>
                   <p className="text-xs text-green-800">
-                    {formData.paymentMethod === 'paypal' 
+                    {formData.paymentMethod === 'paypal'
                       ? 'PayPal handles all payment processing securely. We never see or store your financial information.'
                       : 'Paystack is PCI-DSS Level 1 certified. We never store your complete card details - all sensitive data is tokenized and encrypted.'
                     }
@@ -1085,9 +1220,9 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
             </div>
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button 
-              variant="outline" 
+          <div className="flex gap-3 pt-2 border-t sticky bottom-0 bg-background">
+            <Button
+              variant="outline"
               onClick={() => setVerificationOpen(false)}
               className="flex-1"
               disabled={paymentProcessing}
@@ -1099,19 +1234,11 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
                 let success = false;
                 if (formData.paymentMethod === 'paypal') {
                   success = await processPayPalVerification();
-                } else if (formData.paymentMethod === 'bank') {
-                  success = await processPaystackVerification();
-                }
-                
-                if (success || formData.paymentMethod === 'bank') {
-                  // For bank/Paystack, modal closes and Paystack handles the flow
-                  // For PayPal, only close if successful
-                  if (formData.paymentMethod === 'paypal' && success) {
-                    setVerificationOpen(false);
-                    setCurrentStep(5);
-                  } else if (formData.paymentMethod === 'bank') {
+                  if (success) {
                     setVerificationOpen(false);
                   }
+                } else if (formData.paymentMethod === 'bank') {
+                  await processPaystackVerification();
                 }
               }}
               className="flex-1"
