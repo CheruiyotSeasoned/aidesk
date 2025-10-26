@@ -86,7 +86,7 @@ export const LoginDialog = ({ open, onOpenChange }: LoginDialogProps) => {
 
         <div className="space-y-4">
           {/* Social Login Buttons */}
-          <div className="space-y-3">
+          {/* <div className="space-y-3">
             <Button
               variant="outline"
               className="w-full"
@@ -134,7 +134,7 @@ export const LoginDialog = ({ open, onOpenChange }: LoginDialogProps) => {
                 Or continue with email
               </span>
             </div>
-          </div>
+          </div> */}
 
           {/* Error Display */}
           {error && (

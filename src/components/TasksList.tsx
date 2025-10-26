@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +59,7 @@ const mockTasks: Task[] = [
     availableSlots: 200,
     requirements: ["Native speaker", "Good hearing"],
     locked: false,
-    completed: true,
+    completed: false,
   },
   {
     id: "4",
@@ -81,8 +82,9 @@ const difficultyColors = {
   Advanced: "bg-red-100 text-red-800",
 };
 
+
 export const TasksList = () => {
-  const { user } = useAuth();
+  const { user, logout, loading } = useAuth();
   const [tasks, setTasks] = useState<Task[]>(mockTasks);
   const [unlocking, setUnlocking] = useState<string | null>(null);
 
@@ -98,11 +100,16 @@ export const TasksList = () => {
     
     setUnlocking(null);
   };
-
   const handleStartTask = (taskId: string) => {
-    // Handle starting a task
-    console.log("Starting task:", taskId);
-  };
+  if (user?.approvalStatus === "pending") {
+    toast.warning("Your account is under verification. Please wait for approval before starting tasks.");
+    return;
+  }
+
+  // Continue with normal start logic
+  console.log("Starting task:", taskId);
+};
+
 
   const getTaskStatus = (task: Task) => {
     if (task.completed) {
