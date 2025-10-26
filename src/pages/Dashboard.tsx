@@ -32,7 +32,9 @@ import {
   Menu,
   X,
   Bot,
-  Loader2
+  Loader2,
+  Rocket,
+  Lightbulb
 } from "lucide-react";
 import { TasksList } from "@/components/TasksList";
 import { OnboardingProgress } from "@/components/OnboardingProgress";
@@ -454,9 +456,42 @@ const DashboardOverview = ({ user, setActiveTab, setSidebarOpen }: any) => {
   ];
 
   const recentActivities = [
-    { type: "task_completed", message: "Completed 'Image Classification' task", time: "2 hours ago", icon: CheckCircle2 },
-    { type: "earnings", message: "Earned $15.50 from data labeling", time: "1 day ago", icon: DollarSign },
-    { type: "achievement", message: "Unlocked 'First Task' achievement", time: "2 days ago", icon: Award },
+    {
+      type: "account_created",
+      message: `Welcome aboard, ${user?.name || "Contributor"}! Your account was successfully created.`,
+      time: "3 days ago",
+      icon: CheckCircle2,
+    },
+    {
+      type: "profile_completed",
+      message: `You’ve set up your profile — location: ${user?.location || "N/A"}, skills: ${user?.skills?.join(", ") || "not specified"}.`,
+      time: "2 days ago",
+      icon: Settings,
+    },
+    {
+      type: "onboarding_completed",
+      message: "Onboarding completed 🎉 You’re now ready to receive your first labeling tasks.",
+      time: "1 day ago",
+      icon: Rocket,
+    },
+    {
+      type: "account_review",
+      message: "Your account is currently under review. Once approved, you’ll start seeing available projects.",
+      time: "20 hours ago",
+      icon: Clock,
+    },
+    {
+      type: "tip",
+      message: "💡 Tip: Add more skills to get matched with higher-paying AI labeling projects.",
+      time: "10 hours ago",
+      icon: Lightbulb,
+    },
+    {
+      type: "encouragement",
+      message: "You’re off to a great start! Keep an eye out — your first earning opportunity is coming soon.",
+      time: "just now",
+      icon: Award,
+    },
   ];
 
   return (
@@ -525,30 +560,33 @@ const DashboardOverview = ({ user, setActiveTab, setSidebarOpen }: any) => {
           </div>
         </Card>
 
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
-          <div className="space-y-3">
-            {recentActivities.length > 0 ? (
-              recentActivities.map((activity, index) => {
-                const Icon = activity.icon;
-                return (
-                  <div key={index} className="flex items-center gap-3 p-2 rounded-lg bg-muted/50">
-                    <Icon className="h-4 w-4 text-primary" />
-                    <div className="flex-1">
-                      <p className="text-sm">{activity.message}</p>
-                      <p className="text-xs text-muted-foreground">{activity.time}</p>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No activity yet. Complete your onboarding to get started!</p>
+         <Card className="p-6">
+      <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
+      <div className="space-y-3">
+        {recentActivities.length > 0 ? (
+          recentActivities.map((activity, index) => {
+            const Icon = activity.icon;
+            return (
+              <div
+                key={index}
+                className="flex items-center gap-3 p-2 rounded-lg bg-muted/50"
+              >
+                <Icon className="h-4 w-4 text-primary" />
+                <div className="flex-1">
+                  <p className="text-sm">{activity.message}</p>
+                  <p className="text-xs text-muted-foreground">{activity.time}</p>
+                </div>
               </div>
-            )}
+            );
+          })
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No activity yet. Complete your onboarding to get started!</p>
           </div>
-        </Card>
+        )}
+      </div>
+    </Card>
       </div>
 
       {/* Notifications */}
@@ -622,6 +660,8 @@ const Dashboard = () => {
         return <SettingsView user={user} />;
       case "help":
         return <HelpView />;
+      case "profile":
+        return <SettingsView user={user} />;
       case "dashboard":
       default:
         return <DashboardOverview />;
@@ -637,10 +677,43 @@ const Dashboard = () => {
     ];
 
     const recentActivities = [
-      { type: "task_completed", message: "Completed 'Image Classification' task", time: "2 hours ago", icon: CheckCircle2 },
-      { type: "earnings", message: "Earned $15.50 from data labeling", time: "1 day ago", icon: DollarSign },
-      { type: "achievement", message: "Unlocked 'First Task' achievement", time: "2 days ago", icon: Award },
-    ];
+    {
+      type: "account_created",
+      message: `Welcome aboard, ${user?.name || "Contributor"}! Your account was successfully created.`,
+      time: "3 days ago",
+      icon: CheckCircle2,
+    },
+    {
+      type: "profile_completed",
+      message: `You’ve set up your profile — location: ${user?.location || "N/A"}, skills: ${user?.skills?.join(", ") || "not specified"}.`,
+      time: "2 days ago",
+      icon: Settings,
+    },
+    {
+      type: "onboarding_completed",
+      message: "Onboarding completed 🎉 You’re now ready to receive your first labeling tasks.",
+      time: "1 day ago",
+      icon: Rocket,
+    },
+    {
+      type: "account_review",
+      message: "Your account is currently under review. Once approved, you’ll start seeing available projects.",
+      time: "20 hours ago",
+      icon: Clock,
+    },
+    {
+      type: "tip",
+      message: "💡 Tip: Add more skills to get matched with higher-paying AI labeling projects.",
+      time: "10 hours ago",
+      icon: Lightbulb,
+    },
+    {
+      type: "encouragement",
+      message: "You’re off to a great start! Keep an eye out — your first earning opportunity is coming soon.",
+      time: "just now",
+      icon: Award,
+    },
+  ];
 
     return (
       <div className="space-y-6">

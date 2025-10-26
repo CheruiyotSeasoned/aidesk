@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Send, Bot, User, Minimize2, Maximize2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Message {
   id: string;
@@ -12,6 +13,7 @@ interface Message {
 }
 
 export const Chatbot = () => {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
@@ -52,13 +54,40 @@ export const Chatbot = () => {
     setTimeout(() => {
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: "I understand your question. This is a placeholder response. When integrated with ChatGPT, I'll provide intelligent answers to help you with your tasks, earnings, and platform questions.",
+        text: generateAIResponse(userMessage.text),
         sender: "bot",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, botResponse]);
       setIsTyping(false);
     }, 1500);
+  };
+  const generateAIResponse = (message: string): string => {
+    const lower = message.toLowerCase();
+
+    if (lower.includes("approval") || lower.includes("approve")) {
+      return user?.approvalStatus === "pending"
+        ? "Your profile is currently under review 🕐. Once approved, you’ll start seeing available AI projects in your dashboard."
+        : user?.approvalStatus === "approved"
+        ? "✅ Great news! Your account has been approved. You can now take on real tasks and start earning."
+        : "Your profile hasn’t been submitted for approval yet. Complete onboarding to get started.";
+    }
+
+    if (lower.includes("task") || lower.includes("earn")) {
+      return user?.onboardingCompleted
+        ? "You’ve completed onboarding 🎉. As soon as your profile is approved, your first task recommendations will appear under ‘Available Tasks’."
+        : "Let’s complete your onboarding first — it only takes a minute, and then you’ll be eligible for paid tasks.";
+    }
+
+    if (lower.includes("help") || lower.includes("how")) {
+      return "I can help you check your approval status, onboarding progress, or available tasks. Try asking about 'my approval' or 'my tasks'.";
+    }
+
+    if (lower.includes("hi") || lower.includes("hello")) {
+      return `Hey ${user?.name || "there"} 👋! Hope you’re doing great today. What would you like to know — tasks, approval, or how to start earning?`;
+    }
+
+    return `Thanks for your message! I’m still learning to help contributors like you, ${user?.name || "friend"}. Try asking about your tasks or approval status.`;
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
