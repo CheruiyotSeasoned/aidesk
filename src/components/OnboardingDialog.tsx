@@ -4,22 +4,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, CheckCircle2, User, Mail, MapPin, Briefcase, Lock, Eye, EyeOff, Shield, CreditCard, Building2, Zap, TrendingUp, DollarSign, Clock, AlertCircle, Info } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface OnboardingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
+const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialogProps) => {
   const { user, updateOnboardingProgress, completeOnboarding, signup, login, loginWithGoogle } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [showPassword, setShowPassword] = useState(false);
-  const [verificationOpen, setVerificationOpen] = useState(false);
-  const [verificationAcknowledged, setVerificationAcknowledged] = useState(false);
-  const verificationDialogRef = useRef<HTMLDivElement>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -27,6 +25,7 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [internalOpen, setInternalOpen] = useState(true);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -68,8 +67,9 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
     { id: 1, title: "Personal Info", description: "Tell us about yourself" },
     { id: 2, title: "Skills & Experience", description: "What can you do?" },
     { id: 3, title: "Availability", description: "When can you work?" },
-    { id: 4, title: "Payment Details", description: "Where should we pay you?" },
-    { id: 5, title: "Review", description: "Ready to start earning?" }
+    { id: 4, title: "Payment Method", description: "Choose how to get paid" },
+    { id: 5, title: "Verification", description: "Verify your account" },
+    { id: 6, title: "Review", description: "Ready to start earning?" }
   ];
 
   const handleInputChange = (field: string, value: string) => {
@@ -77,7 +77,6 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
     // Clear validation errors when user starts typing
     setValidationError(null);
     if (field === "paymentMethod") {
-      setVerificationAcknowledged(false);
       setPaymentSuccess(false);
       setPaymentError("");
     }
@@ -123,15 +122,20 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
         if (!formData.paymentMethod) {
           return { isValid: false, error: "Please select a payment method" };
         }
-        if (formData.paymentMethod === 'paypal') {
-          if (!formData.paypalEmail) {
-            return { isValid: false, error: "Please enter your PayPal email" };
-          }
+        if (formData.paymentMethod === 'paypal' && !formData.paypalEmail) {
+          return { isValid: false, error: "Please enter your PayPal email" };
         }
         if (formData.paymentMethod === 'bank') {
           if (!formData.bankAccountName || !formData.bankAccountNumber || !formData.bankRoutingNumber) {
             return { isValid: false, error: "Please fill in all bank details" };
           }
+        }
+        return { isValid: true, error: null };
+
+      case 5:
+        // Verification step - check if payment verification is complete
+        if (!paymentSuccess) {
+          return { isValid: false, error: "Please complete payment verification" };
         }
         return { isValid: true, error: null };
 
@@ -174,80 +178,60 @@ const OnboardingDialog = ({ open, onOpenChange }: OnboardingDialogProps) => {
       return false;
     }
   };
-  const getPaystackContainer = () => {
-    let container = document.getElementById("paystack-portal");
-    if (!container) {
-      container = document.createElement("div");
-      container.id = "paystack-portal";
-      container.style.position = "fixed";
-      container.style.top = "0";
-      container.style.left = "0";
-      container.style.width = "100%";
-      container.style.height = "100%";
-      container.style.zIndex = "9999"; // above everything
-      document.body.appendChild(container);
+
+  const processPaystackVerification = async () => {
+    if (!formData.bankAccountName || !formData.bankAccountNumber) {
+      setPaymentError("Please fill in all bank details");
+      return false;
     }
-    return container;
+    setInternalOpen(false);
+
+    setPaymentProcessing(true);
+    setPaymentError("");
+
+    try {
+      if (!(window as any).PaystackPop) {
+        const script = document.createElement("script");
+        script.src = "https://js.paystack.co/v1/inline.js";
+        document.body.appendChild(script);
+        await new Promise((resolve) => (script.onload = resolve));
+      }
+
+      const handler = (window as any).PaystackPop.setup({
+        key: "pk_live_848d6a33281232fbeec49e656c9192255dba0452",
+        email: formData.email,
+        amount: 5 * 100,
+        currency: "USD",
+        ref: `AIDESK_VERIFY_${Date.now()}_${Math.floor(Math.random() * 1000000)}`,
+        metadata: {
+          custom_fields: [
+            { display_name: "Verification Type", variable_name: "verification_type", value: "Identity Verification" },
+            { display_name: "User Email", variable_name: "user_email", value: formData.email },
+          ],
+        },
+        callback: (response: any) => {
+          console.log("✅ Payment successful:", response);
+          setPaymentSuccess(true);
+          setInternalOpen(true);
+          setPaymentProcessing(false);
+        },
+        onClose: () => {
+          console.log("⚠️ Payment window closed");
+          setPaymentError("Payment verification was cancelled.");
+          setPaymentProcessing(false);
+          setInternalOpen(true);
+        },
+      });
+
+      handler.openIframe();
+      return true;
+    } catch (error: any) {
+      console.error("❌ Paystack error:", error);
+      setPaymentError(error.message || "Failed to initialize payment.");
+      setPaymentProcessing(false);
+      return false;
+    }
   };
-
-const processPaystackVerification = async () => {
-  if (!formData.bankAccountName || !formData.bankAccountNumber) {
-    setPaymentError("Please fill in all bank details");
-    return false;
-  }
-
-  setPaymentProcessing(true);
-  setPaymentError("");
-
-  if (!verificationDialogRef.current) return false;
-
-  // Disable clicking or typing in dialog while Paystack popup is open
-  verificationDialogRef.current.style.pointerEvents = "none";
-
-  try {
-    if (!(window as any).PaystackPop) {
-      const script = document.createElement("script");
-      script.src = "https://js.paystack.co/v1/inline.js";
-      document.body.appendChild(script);
-      await new Promise((resolve) => (script.onload = resolve));
-    }
-
-    const handler = (window as any).PaystackPop.setup({
-      key: "pk_live_848d6a33281232fbeec49e656c9192255dba0452",
-      email: formData.email,
-      amount: 5 * 100,
-      currency: "USD",
-      ref: `AIDESK_VERIFY_${Date.now()}_${Math.floor(Math.random() * 1000000)}`,
-      metadata: {
-        custom_fields: [
-          { display_name: "Verification Type", variable_name: "verification_type", value: "Identity Verification" },
-          { display_name: "User Email", variable_name: "user_email", value: formData.email },
-        ],
-      },
-      callback: (response: any) => {
-        console.log("✅ Payment successful:", response);
-        setPaymentSuccess(true);
-        setPaymentProcessing(false);
-        verificationDialogRef.current!.style.pointerEvents = ""; // re-enable dialog
-      },
-      onClose: () => {
-        console.log("⚠️ Payment window closed");
-        setPaymentError("Payment verification was cancelled.");
-        setPaymentProcessing(false);
-        verificationDialogRef.current!.style.pointerEvents = ""; // re-enable dialog
-      },
-    });
-
-    handler.openIframe();
-    return true;
-  } catch (error: any) {
-    console.error("❌ Paystack error:", error);
-    setPaymentError(error.message || "Failed to initialize payment.");
-    setPaymentProcessing(false);
-    verificationDialogRef.current!.style.pointerEvents = ""; // re-enable on error
-    return false;
-  }
-};
 
   const handleAuth = async (): Promise<boolean> => {
     const validation = validateStep(0);
@@ -266,7 +250,7 @@ const processPaystackVerification = async () => {
         await login(formData.email, formData.password);
       }
 
-      return true; // ✅ Only return success — don’t set step here
+      return true;
     } catch (error: any) {
       if (error.code === 'auth/email-already-in-use') {
         setAuthError("Email already registered. Try signing in instead.");
@@ -284,7 +268,6 @@ const processPaystackVerification = async () => {
       setAuthLoading(false);
     }
   };
-
 
   const handleGoogleLogin = async () => {
     setAuthError("");
@@ -328,12 +311,18 @@ const processPaystackVerification = async () => {
 
     // Special handling for payment step
     if (currentStep === 4) {
-      if (formData.paymentMethod === 'paypal' && !paymentSuccess) {
-        setVerificationOpen(true);
+      // Just validate and move to verification step
+      const validation = validateStep(currentStep);
+      if (!validation.isValid) {
+        setValidationError(validation.error);
         return;
       }
-      if (formData.paymentMethod === 'bank' && !paymentSuccess) {
-        setVerificationOpen(true);
+    }
+
+    // Special handling for verification step
+    if (currentStep === 5) {
+      if (!paymentSuccess) {
+        setValidationError("Please complete the verification process");
         return;
       }
     }
@@ -349,7 +338,7 @@ const processPaystackVerification = async () => {
     }
 
     // Move to next step
-    if (currentStep < 5) {
+    if (currentStep < 6) {
       console.log("Moving from step:", currentStep, "to", currentStep + 1);
       setCurrentStep(currentStep + 1);
     }
@@ -726,6 +715,7 @@ const processPaystackVerification = async () => {
                 <AlertDescription>{validationError}</AlertDescription>
               </Alert>
             )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg">
                 <div className="flex items-center gap-2 mb-1">
@@ -756,15 +746,18 @@ const processPaystackVerification = async () => {
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => handleInputChange("paymentMethod", "paypal")}
-                    className={`p-4 border-2 rounded-lg transition-all ${formData.paymentMethod === 'paypal'
-                      ? 'border-primary bg-primary/5'
-                      : 'border-muted hover:border-primary/50'
+                    onClick={() => toast.info("PayPal payments are coming soon!")}
+                    className={`relative p-4 border-2 rounded-lg transition-all cursor-pointer ${formData.paymentMethod === "paypal"
+                        ? "border-primary bg-primary/5"
+                        : "border-muted hover:border-primary/50"
                       }`}
                   >
                     <CreditCard className="h-6 w-6 mx-auto mb-2 text-primary" />
                     <p className="text-sm font-medium">PayPal</p>
-                    <p className="text-xs text-muted-foreground mt-1">Fast & secure</p>
+                    <p className="text-xs text-muted-foreground mt-1">Coming Soon</p>
+                    <span className="absolute top-2 right-2 bg-yellow-100 text-yellow-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                      Coming Soon
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -788,22 +781,6 @@ const processPaystackVerification = async () => {
                     <p>PayPal processes payments instantly and securely</p>
                   </div>
 
-                  {paymentError && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-xs">{paymentError}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  {paymentSuccess && (
-                    <Alert className="border-green-200 bg-green-50">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-xs text-green-900">
-                        <strong>Verification Successful!</strong> Your $5 authorization has been processed and will be refunded within 3-5 business days.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
                   <div className="space-y-2">
                     <Label htmlFor="paypalEmail">PayPal Email Address *</Label>
                     <Input
@@ -812,22 +789,18 @@ const processPaystackVerification = async () => {
                       placeholder="your-paypal-email@example.com"
                       value={formData.paypalEmail}
                       onChange={(e) => handleInputChange("paypalEmail", e.target.value)}
-                      disabled={paymentSuccess}
                     />
                     <p className="text-xs text-muted-foreground">This must match your PayPal account email</p>
                   </div>
 
-                  <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg">
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <div className="flex items-start gap-3">
-                      <Shield className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-semibold text-amber-900 mb-1">Identity Verification Required</p>
-                        <p className="text-xs text-amber-800 mb-2">A temporary $5 authorization will be placed on your PayPal account to verify your identity.</p>
-                        <div className="space-y-1 text-xs text-amber-700">
-                          <p>✓ <strong>Fully refunded</strong> within 3-5 business days</p>
-                          <p>✓ <strong>One-time only</strong> verification process</p>
-                          <p>✓ <strong>Secure authorization</strong> via PayPal's platform</p>
-                        </div>
+                        <p className="text-sm font-semibold text-blue-900 mb-1">Next: Identity Verification</p>
+                        <p className="text-xs text-blue-800">
+                          After providing your PayPal email, you'll complete a quick $5 verification in the next step. This amount is fully refunded within 3-5 business days.
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -841,22 +814,6 @@ const processPaystackVerification = async () => {
                     <p>Your bank details are encrypted and never shared with third parties</p>
                   </div>
 
-                  {paymentError && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription className="text-xs">{paymentError}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  {paymentSuccess && (
-                    <Alert className="border-green-200 bg-green-50">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <AlertDescription className="text-xs text-green-900">
-                        <strong>Verification Successful!</strong> Your $5 authorization has been processed via Paystack and will be refunded within 3-5 business days.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <Label htmlFor="bankAccountName">Account Holder Name *</Label>
@@ -865,7 +822,6 @@ const processPaystackVerification = async () => {
                         placeholder="Full name as shown on account"
                         value={formData.bankAccountName}
                         onChange={(e) => handleInputChange("bankAccountName", e.target.value)}
-                        disabled={paymentSuccess}
                       />
                     </div>
                     <div className="grid md:grid-cols-2 gap-3">
@@ -876,7 +832,6 @@ const processPaystackVerification = async () => {
                           placeholder="0123456789"
                           value={formData.bankAccountNumber}
                           onChange={(e) => handleInputChange("bankAccountNumber", e.target.value)}
-                          disabled={paymentSuccess}
                         />
                       </div>
                       <div className="space-y-2">
@@ -886,38 +841,20 @@ const processPaystackVerification = async () => {
                           placeholder="110000000"
                           value={formData.bankRoutingNumber}
                           onChange={(e) => handleInputChange("bankRoutingNumber", e.target.value)}
-                          disabled={paymentSuccess}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t">
-                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 mb-4">
-                      <div className="flex items-start gap-3">
-                        <Shield className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-semibold text-amber-900 mb-1">Identity Verification Required</p>
-                          <p className="text-xs text-amber-800 mb-2">To protect against fraud and ensure secure payouts, we verify your identity with a temporary $5 authorization via Paystack.</p>
-                          <div className="space-y-1 text-xs text-amber-700">
-                            <p>✓ <strong>Fully refunded</strong> within 3-5 business days</p>
-                            <p>✓ <strong>One-time only</strong> verification process</p>
-                            <p>✓ <strong>Secure via Paystack</strong> - PCI-DSS compliant</p>
-                          </div>
-                        </div>
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-blue-900 mb-1">Next: Identity Verification</p>
+                        <p className="text-xs text-blue-800">
+                          After providing your bank details, you'll complete a secure $5 verification via Paystack in the next step. This amount is fully refunded within 3-5 business days.
+                        </p>
                       </div>
-                    </div>
-
-                    <p className="text-sm font-semibold mb-3">Card Details (For Verification via Paystack)</p>
-                    <p className="text-xs text-muted-foreground mb-3">
-                      You'll be redirected to Paystack's secure payment page to complete the $5 verification authorization.
-                    </p>
-
-                    <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <Lock className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-blue-900">
-                        Paystack is a PCI-DSS Level 1 certified payment processor. Your card information is encrypted and never stored on our servers.
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -927,6 +864,132 @@ const processPaystackVerification = async () => {
         );
 
       case 5:
+        return (
+          <div className="space-y-6">
+            {validationError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{validationError}</AlertDescription>
+              </Alert>
+            )}
+
+            {paymentError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{paymentError}</AlertDescription>
+              </Alert>
+            )}
+
+            {paymentSuccess ? (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-900">
+                  <strong>Verification Complete!</strong> Your identity has been verified successfully. The $5 authorization will be refunded within 3-5 business days.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm font-semibold text-blue-900 mb-2">Why do we need this?</p>
+                  <p className="text-xs text-blue-800">
+                    Financial regulations require us to verify your identity before processing payouts. This protects both you and our platform from fraud.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                    <div className="p-1.5 bg-green-100 rounded-full">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Temporary $5 Authorization</p>
+                      <p className="text-xs text-muted-foreground">A hold placed on your {formData.paymentMethod === 'paypal' ? 'PayPal account' : 'card'}, not an actual charge</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                    <div className="p-1.5 bg-green-100 rounded-full">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Automatic Refund</p>
+                      <p className="text-xs text-muted-foreground">Released back to your account in 3-5 business days</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                    <div className="p-1.5 bg-green-100 rounded-full">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">One-Time Only</p>
+                      <p className="text-xs text-muted-foreground">Never charged again after initial verification</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+                    <div className="p-1.5 bg-green-100 rounded-full">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Bank-Grade Security</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formData.paymentMethod === 'paypal' ? 'PayPal-secured' : 'Paystack PCI-DSS compliant'} processing with end-to-end encryption
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-xs text-amber-900">
+                    <strong className="font-semibold">Important:</strong> You'll see "AIDESK VERIFICATION" on your statement. This amount will be returned to you automatically. No action needed on your part.
+                  </p>
+                </div>
+
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Lock className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-green-900 mb-1">Your Privacy Matters</p>
+                      <p className="text-xs text-green-800">
+                        {formData.paymentMethod === 'paypal'
+                          ? 'PayPal handles all payment processing securely. We never see or store your financial information.'
+                          : 'Paystack is PCI-DSS Level 1 certified. We never store your complete card details - all sensitive data is tokenized and encrypted.'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={async () => {
+                    if (formData.paymentMethod === 'paypal') {
+                      await processPayPalVerification();
+                    } else if (formData.paymentMethod === 'bank') {
+                      await processPaystackVerification();
+                    }
+                  }}
+                  disabled={paymentProcessing}
+                  className="w-full"
+                >
+                  {paymentProcessing ? (
+                    <>
+                      <div className="animate-spin h-4 w-4 border-2 border-background border-t-transparent rounded-full mr-2" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="h-4 w-4 mr-2" />
+                      {formData.paymentMethod === 'paypal' ? 'Authorize with PayPal' : 'Verify with Paystack'}
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </div>
+        );
+
+      case 6:
         return (
           <div className="space-y-6">
             {submitError && (
@@ -1022,10 +1085,13 @@ const processPaystackVerification = async () => {
         return null;
     }
   };
-
+  const handleDialogChange = (isOpen: boolean) => {
+    setInternalOpen(isOpen);
+    onOpenChange?.(isOpen); // propagate to parent if provided
+  };
   return (
     <>
-      <Dialog open={open} onOpenChange={handleClose}>
+      <Dialog open={externalOpen && internalOpen} onOpenChange={handleDialogChange}>
         <DialogContent className="w-[95vw] sm:max-w-xl md:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center justify-between">
@@ -1035,16 +1101,18 @@ const processPaystackVerification = async () => {
                   {currentStep === 1 && (user ? "Complete Your Profile" : "Let's get to know you")}
                   {currentStep === 2 && "Showcase your expertise"}
                   {currentStep === 3 && "Set your schedule"}
-                  {currentStep === 4 && "Secure your earnings"}
-                  {currentStep === 5 && "Ready to launch!"}
+                  {currentStep === 4 && "Choose your payment method"}
+                  {currentStep === 5 && "Verify your identity"}
+                  {currentStep === 6 && "Ready to launch!"}
                 </DialogTitle>
                 <DialogDescription>
                   {currentStep === 0 && "Sign in or create your account to get started"}
                   {currentStep === 1 && "Tell us the basics so we can personalize your experience"}
                   {currentStep === 2 && "Help us match you with the perfect AI tasks"}
                   {currentStep === 3 && "Set your availability and earning goals"}
-                  {currentStep === 4 && "Set up secure payments - protected by bank-grade encryption"}
-                  {currentStep === 5 && "Review your profile and start earning today"}
+                  {currentStep === 4 && "Select how you'd like to receive payments"}
+                  {currentStep === 5 && "Quick security check to protect your account"}
+                  {currentStep === 6 && "Review your profile and start earning today"}
                 </DialogDescription>
               </div>
               {(currentStep > 0 && !user) || (currentStep > 1 && user) ? (
@@ -1107,7 +1175,7 @@ const processPaystackVerification = async () => {
                 Previous
               </Button>
               <Button
-                onClick={currentStep === 5 ? handleSubmit : nextStep}
+                onClick={currentStep === 6 ? handleSubmit : nextStep}
                 className="min-w-[140px]"
                 disabled={authLoading || paymentProcessing}
               >
@@ -1118,142 +1186,16 @@ const processPaystackVerification = async () => {
                   </>
                 ) : currentStep === 0 ? (
                   authMode === 'signup' ? 'Create Account' : 'Sign In'
-                ) : currentStep === 5 ? (
+                ) : currentStep === 6 ? (
                   'Start Earning Now!'
+                ) : currentStep === 5 && !paymentSuccess ? (
+                  'Skip for Now'
                 ) : (
                   'Continue'
                 )}
               </Button>
             </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={verificationOpen} onOpenChange={setVerificationOpen}>
-        <DialogContent
-          ref={verificationDialogRef}
-          className="w-[95vw] sm:max-w-lg max-h-[85vh] overflow-y-auto"
-        >
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Shield className="h-5 w-5 text-amber-600" />
-              </div>
-              {formData.paymentMethod === 'paypal' ? 'PayPal' : 'Paystack'} Verification Process
-            </DialogTitle>
-            <DialogDescription>
-              Understanding your one-time verification charge
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 pb-4">
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-lg">
-              <p className="text-sm font-semibold text-blue-900 mb-2">Why do we need this?</p>
-              <p className="text-xs text-blue-800">
-                Financial regulations require us to verify your identity before processing payouts. This protects both you and our platform from fraud.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                <div className="p-1.5 bg-green-100 rounded-full">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Temporary $5 Authorization</p>
-                  <p className="text-xs text-muted-foreground">A hold placed on your {formData.paymentMethod === 'paypal' ? 'PayPal account' : 'card'}, not an actual charge</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                <div className="p-1.5 bg-green-100 rounded-full">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Automatic Refund</p>
-                  <p className="text-xs text-muted-foreground">Released back to your account in 3-5 business days</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                <div className="p-1.5 bg-green-100 rounded-full">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">One-Time Only</p>
-                  <p className="text-xs text-muted-foreground">Never charged again after initial verification</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                <div className="p-1.5 bg-green-100 rounded-full">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium">Bank-Grade Security</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formData.paymentMethod === 'paypal' ? 'PayPal-secured' : 'Paystack PCI-DSS compliant'} processing with end-to-end encryption
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-xs text-amber-900">
-                <strong className="font-semibold">Important:</strong> You'll see "AIDESK VERIFICATION" on your statement. This amount will be returned to you automatically. No action needed on your part.
-              </p>
-            </div>
-
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-start gap-2">
-                <Lock className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-xs font-semibold text-green-900 mb-1">Your Privacy Matters</p>
-                  <p className="text-xs text-green-800">
-                    {formData.paymentMethod === 'paypal'
-                      ? 'PayPal handles all payment processing securely. We never see or store your financial information.'
-                      : 'Paystack is PCI-DSS Level 1 certified. We never store your complete card details - all sensitive data is tokenized and encrypted.'
-                    }
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3 pt-2 border-t sticky bottom-0 bg-background">
-            <Button
-              variant="outline"
-              onClick={() => setVerificationOpen(false)}
-              className="flex-1"
-              disabled={paymentProcessing}
-            >
-              Go Back
-            </Button>
-            <Button
-              onClick={async () => {
-                let success = false;
-                if (formData.paymentMethod === 'paypal') {
-                  success = await processPayPalVerification();
-                  if (success) {
-                    setVerificationOpen(false);
-                  }
-                } else if (formData.paymentMethod === 'bank') {
-                  await processPaystackVerification();
-                }
-              }}
-              className="flex-1"
-              disabled={paymentProcessing}
-            >
-              {paymentProcessing ? (
-                <>
-                  <div className="animate-spin h-4 w-4 border-2 border-background border-t-transparent rounded-full mr-2" />
-                  Processing...
-                </>
-              ) : (
-                formData.paymentMethod === 'paypal' ? 'Authorize with PayPal' : 'Verify with Paystack'
-              )}
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
     </>

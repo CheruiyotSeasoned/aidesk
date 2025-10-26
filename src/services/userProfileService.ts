@@ -12,10 +12,13 @@ export class UserProfileService {
     try {
       const { data: profile, error } = await supabase
         .from('user_profiles')
-        .upsert({
-          ...data,
-          updated_at: new Date().toISOString(),
-        })
+        .upsert(
+          {
+            ...data,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' } // ✅ Added this
+        )
         .select()
         .single();
 
@@ -40,8 +43,7 @@ export class UserProfileService {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // No profile found
-          return null;
+          return null; // No profile found
         }
         throw error;
       }
@@ -86,27 +88,30 @@ export class UserProfileService {
     try {
       const { data: profile, error } = await supabase
         .from('user_profiles')
-        .upsert({
-          user_id: userId,
-          name: onboardingData.name,
-          email: onboardingData.email,
-          phone: onboardingData.phone,
-          location: onboardingData.location,
-          bio: onboardingData.bio,
-          skills: onboardingData.skills,
-          availability: onboardingData.availability,
-          payment_details: onboardingData.payment_details,
-          onboarding_progress: {
-            personal_info: true,
-            skills: true,
-            availability: true,
-            payment: true,
-            review: true,
+        .upsert(
+          {
+            user_id: userId,
+            name: onboardingData.name,
+            email: onboardingData.email,
+            phone: onboardingData.phone,
+            location: onboardingData.location,
+            bio: onboardingData.bio,
+            skills: onboardingData.skills,
+            availability: onboardingData.availability,
+            payment_details: onboardingData.payment_details,
+            onboarding_progress: {
+              personal_info: true,
+              skills: true,
+              availability: true,
+              payment: true,
+              review: true,
+            },
+            onboarding_completed: true,
+            approval_status: 'pending',
+            updated_at: new Date().toISOString(),
           },
-          onboarding_completed: true,
-          approval_status: 'pending',
-          updated_at: new Date().toISOString(),
-        })
+          { onConflict: 'user_id' } // ✅ Added here too
+        )
         .select()
         .single();
 
@@ -187,7 +192,10 @@ export class UserProfileService {
    * 🧭 Get session
    */
   static async getSession() {
-    const { data: { session }, error } = await supabase.auth.getSession();
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
     if (error) {
       console.error('Session error:', error);
       return null;
@@ -199,7 +207,10 @@ export class UserProfileService {
    * 🧭 Refresh session
    */
   static async refreshSession() {
-    const { data: { session }, error } = await supabase.auth.refreshSession();
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.refreshSession();
     if (error) {
       console.error('Session refresh error:', error);
       throw error;
