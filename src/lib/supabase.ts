@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Supabase configuration
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://hmubutducpippaokjksw.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtdWJ1dGR1Y3BpcHBhb2tqa3N3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA3MjQyNTcsImV4cCI6MjA3NjMwMDI1N30.oXKOaSaX_aamVWcDUGOK8L56OS2Q9taFSFT1TghExBs';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://hzbyxikbbdlgjtspispt.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_AeKLhHAv4YTtB8iOopM_hg_e0s-NAte';
 
 // Check if using demo configuration
-const isDemoConfig = supabaseUrl === 'https://hmubutducpippaokjksw.supabase.co';
+const isDemoConfig = supabaseUrl === 'https://hzbyxikbbdlgjtspispt.supabase.co';
 
 if (isDemoConfig) {
   console.warn("⚠️ Using demo Supabase configuration. Please set up your environment variables:");
