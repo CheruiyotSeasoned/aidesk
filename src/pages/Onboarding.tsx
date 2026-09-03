@@ -4,8 +4,13 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, CheckCircle2, User, Mail, MapPin, Briefcase, Lock, Eye, EyeOff, Shield, CreditCard, Building2, Zap, TrendingUp, DollarSign, Clock, AlertCircle, Info } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { ApiError } from "@/lib/api";
 
 const OnboardingPage = () => {
+  const navigate = useNavigate();
+  const { user, signup, login, updateOnboardingProgress, completeOnboarding } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [showPassword, setShowPassword] = useState(false);
@@ -23,9 +28,11 @@ const OnboardingPage = () => {
     confirmPassword: "",
     name: "",
     location: "",
+    phone: "",
     experience: "",
     skills: "",
     availability: "",
+    preferredSchedule: "",
     hourlyRate: "",
     bio: "",
     paymentMethod: "",
@@ -136,11 +143,14 @@ const OnboardingPage = () => {
     setAuthLoading(true);
 
     try {
-      // Simulate auth
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (authMode === 'signup') {
+        await signup(formData.email, formData.password);
+      } else {
+        await login(formData.email, formData.password);
+      }
       return true;
     } catch (error: any) {
-      setAuthError(error.message || "Authentication failed. Please try again.");
+      setAuthError(error instanceof ApiError ? error.firstError : (error?.message || "Authentication failed. Please try again."));
       return false;
     } finally {
       setAuthLoading(false);
@@ -185,11 +195,53 @@ const OnboardingPage = () => {
 
   const handleSubmit = async () => {
     setSubmitError(null);
+    setAuthLoading(true);
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      alert("Onboarding complete! Welcome to AIDESK SPACE 🎉");
-    } catch (error: any) {
-      setSubmitError('An unexpected error occurred. Please try again.');
+      await updateOnboardingProgress('review');
+    } catch (error) {
+      // Non-fatal: the completion call below sets every step to done anyway.
+      console.error('Error updating onboarding progress:', error);
+    }
+
+    try {
+      await completeOnboarding({
+        name: formData.name,
+        phone: formData.phone || undefined,
+        location: formData.location,
+        bio: formData.bio,
+        experience: formData.experience || null,
+        hourly_rate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
+        skills: formData.skills
+          ? formData.skills.split(',').map((s) => s.trim()).filter(Boolean)
+          : [],
+        availability: {
+          hours_per_week: parseInt(formData.availability, 10) || 0,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          preferred_schedule: formData.preferredSchedule || 'flexible',
+        },
+        payment_details: {
+          method: formData.paymentMethod === 'bank' ? 'bank_transfer' : 'paypal',
+          paypal_email: formData.paypalEmail || null,
+          bank_account_name: formData.bankAccountName || null,
+          bank_account_number: formData.bankAccountNumber || null,
+          bank_routing_number: formData.bankRoutingNumber || null,
+          // Card details are never sent - Paystack collects them in its own popup.
+        },
+      });
+
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      setSubmitError(
+        error instanceof ApiError
+          ? (error.status === 401
+              ? 'Your session expired. Please sign in again.'
+              : error.firstError)
+          : 'An unexpected error occurred. Please try again.',
+      );
+    } finally {
+      setAuthLoading(false);
     }
   };
 
@@ -403,14 +455,26 @@ const OnboardingPage = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="availability">Weekly Availability *</Label>
+              <Label htmlFor="availability">Hours Available Per Week *</Label>
               <Input
                 id="availability"
-                placeholder="e.g., 20 hours/week, flexible schedule"
+                type="number"
+                min="1"
+                max="168"
+                placeholder="20"
                 value={formData.availability}
                 onChange={(e) => handleInputChange("availability", e.target.value)}
               />
               <p className="text-xs text-muted-foreground">Be realistic - this helps us match you with suitable projects</p>
+            <div className="space-y-2">
+              <Label htmlFor="preferredSchedule">Preferred Schedule *</Label>
+              <Input
+                id="preferredSchedule"
+                placeholder="e.g., weekday evenings, weekends, flexible"
+                value={formData.preferredSchedule}
+                onChange={(e) => handleInputChange("preferredSchedule", e.target.value)}
+              />
+            </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="hourlyRate">Desired Hourly Rate (USD) *</Label>

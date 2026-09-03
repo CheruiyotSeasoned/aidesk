@@ -4,9 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, CheckCircle2, User, Mail, MapPin, Briefcase, Lock, Eye, EyeOff, Shield, CreditCard, Building2, Zap, TrendingUp, DollarSign, Clock, AlertCircle, Info } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import { ApiError } from "@/lib/api";
 
 interface OnboardingDialogProps {
   open: boolean;
@@ -14,7 +14,7 @@ interface OnboardingDialogProps {
 }
 
 const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialogProps) => {
-  const { user, updateOnboardingProgress, completeOnboarding, signup, login, loginWithGoogle } = useAuth();
+  const { user, updateOnboardingProgress, completeOnboarding, signup, login } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [showPassword, setShowPassword] = useState(false);
@@ -26,15 +26,19 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [internalOpen, setInternalOpen] = useState(true);
+  // Guards the init effect below so it runs once per opening, not per user change.
+  const hasInitialized = useRef(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     confirmPassword: "",
     name: "",
     location: "",
+    phone: "",
     experience: "",
     skills: "",
     availability: "",
+    preferredSchedule: "",
     hourlyRate: "",
     bio: "",
     paymentMethod: "",
@@ -42,25 +46,29 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
     bankAccountName: "",
     bankAccountNumber: "",
     bankRoutingNumber: "",
-    cardHolderName: "",
-    cardNumber: "",
-    cardExpiry: "",
-    cardCvv: "",
   });
-
-  // Check if user is already authenticated and skip to step 1
+  // Pick the starting step once per opening. This deliberately does NOT react to
+  // `user` identity: updateOnboardingProgress returns a fresh user object after
+  // every step, and re-running this would snap the wizard back to step 1.
   useEffect(() => {
-    if (user && open) {
-      setCurrentStep(1);
-      setFormData(prev => ({
-        ...prev,
-        email: user.email || "",
-        name: user.name || ""
-      }));
-    } else if (!user && open) {
-      setCurrentStep(0);
+    if (!open) {
+      hasInitialized.current = false;
+      return;
     }
-  }, [user, open]);
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
+    setCurrentStep(user ? 1 : 0);
+  }, [open, user]);
+
+  // Prefill from the account, without clobbering anything already typed.
+  useEffect(() => {
+    if (!user) return;
+    setFormData(prev => ({
+      ...prev,
+      email: prev.email || user.email || "",
+      name: prev.name || user.name || "",
+    }));
+  }, [user]);
 
   const steps = [
     { id: 0, title: "Account", description: "Secure your account" },
@@ -113,8 +121,11 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
         return { isValid: true, error: null };
 
       case 3:
-        if (!formData.availability || !formData.hourlyRate) {
-          return { isValid: false, error: "Please fill in your availability and hourly rate" };
+        if (!formData.availability || !formData.preferredSchedule || !formData.hourlyRate) {
+          return { isValid: false, error: "Please fill in your hours, schedule and hourly rate" };
+        }
+        if (Number(formData.availability) < 1 || Number(formData.availability) > 168) {
+          return { isValid: false, error: "Hours per week must be between 1 and 168" };
         }
         return { isValid: true, error: null };
 
@@ -269,26 +280,6 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setAuthError("");
-    setAuthLoading(true);
-
-    try {
-      await loginWithGoogle();
-      setCurrentStep(1);
-    } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user') {
-        setAuthError("Google sign-in was cancelled");
-      } else if (error.code === 'auth/popup-blocked') {
-        setAuthError("Pop-up blocked. Please allow pop-ups for this site.");
-      } else {
-        setAuthError(error.message || "Google sign-in failed. Please try again.");
-      }
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
   const nextStep = async () => {
     // Clear previous errors
     setValidationError(null);
@@ -359,27 +350,26 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
       // Prepare onboarding data for Supabase
       const onboardingData = {
         name: formData.name || user?.name || '',
-        email: formData.email || user?.email || '',
-        phone: formData.location,
+        phone: formData.phone || undefined,
         location: formData.location,
         bio: formData.bio,
-        skills: formData.skills ? formData.skills.split(',').map(s => s.trim()) : [],
+        experience: formData.experience || null,
+        hourly_rate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
+        skills: formData.skills ? formData.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
         availability: {
-          hours_per_week: parseInt(formData.availability) || 0,
+          hours_per_week: parseInt(formData.availability, 10) || 0,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          preferred_schedule: formData.availability || 'flexible'
+          preferred_schedule: formData.preferredSchedule || 'flexible',
         },
         payment_details: {
-          method: formData.paymentMethod as 'paypal' | 'bank_transfer',
-          paypal_email: formData.paypalEmail,
-          bank_account_name: formData.bankAccountName,
-          bank_account_number: formData.bankAccountNumber,
-          bank_routing_number: formData.bankRoutingNumber,
-          card_holder_name: formData.cardHolderName,
-          card_number: formData.cardNumber,
-          card_expiry: formData.cardExpiry,
-          card_cvv: formData.cardCvv
-        }
+          method: (formData.paymentMethod === 'bank' ? 'bank_transfer' : 'paypal') as 'paypal' | 'bank_transfer',
+          paypal_email: formData.paypalEmail || null,
+          bank_account_name: formData.bankAccountName || null,
+          bank_account_number: formData.bankAccountNumber || null,
+          bank_routing_number: formData.bankRoutingNumber || null,
+          // Card details are never sent: Paystack's popup collects them directly,
+          // and storing a PAN or CVV here would put this app in PCI scope.
+        },
       };
 
       // First update the onboarding progress
@@ -401,15 +391,15 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
       } catch (error: any) {
         console.error('Error completing onboarding:', error);
 
+        // The API returns Laravel validation errors keyed by field; surface the
+        // most specific message rather than the generic summary.
         let errorMessage = 'Failed to complete onboarding. Please try again.';
 
-        if (error.code === 'PGRST301') {
-          errorMessage = 'Database connection error. Please try again later.';
-        } else if (error.code === '23505') {
-          errorMessage = 'A profile already exists for this account.';
-        } else if (error.code === '23503') {
-          errorMessage = 'Invalid user reference. Please sign in again.';
-        } else if (error.message) {
+        if (error instanceof ApiError) {
+          errorMessage = error.status === 401
+            ? 'Your session expired. Please sign in again.'
+            : error.firstError;
+        } else if (error?.message) {
           errorMessage = error.message;
         }
 
@@ -532,42 +522,6 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
               </div>
             </div>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleGoogleLogin}
-              disabled={authLoading}
-              className="w-full"
-            >
-              <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
-                <path
-                  fill="currentColor"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
-              {authLoading ? 'Processing...' : 'Continue with Google'}
-            </Button>
           </div>
         );
 
@@ -608,6 +562,16 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
                 placeholder="City, Country"
                 value={formData.location}
                 onChange={(e) => handleInputChange("location", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+254 700 000 000"
+                value={formData.phone}
+                onChange={(e) => handleInputChange("phone", e.target.value)}
               />
             </div>
           </div>
@@ -679,14 +643,26 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="availability">Weekly Availability *</Label>
+              <Label htmlFor="availability">Hours Available Per Week *</Label>
               <Input
                 id="availability"
-                placeholder="e.g., 20 hours/week, flexible schedule"
+                type="number"
+                min="1"
+                max="168"
+                placeholder="20"
                 value={formData.availability}
                 onChange={(e) => handleInputChange("availability", e.target.value)}
               />
               <p className="text-xs text-muted-foreground">Be realistic - this helps us match you with suitable projects</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="preferredSchedule">Preferred Schedule *</Label>
+              <Input
+                id="preferredSchedule"
+                placeholder="e.g., weekday evenings, weekends, flexible"
+                value={formData.preferredSchedule}
+                onChange={(e) => handleInputChange("preferredSchedule", e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="hourlyRate">Desired Hourly Rate (USD) *</Label>
@@ -746,13 +722,10 @@ const OnboardingDialog = ({ open: externalOpen, onOpenChange }: OnboardingDialog
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => toast.info("PayPal payments are coming soon!")}
-                    className={`relative p-4 border-2 rounded-lg transition-all cursor-pointer ${formData.paymentMethod === "paypal"
-                        ? "border-primary bg-primary/5"
-                        : "border-muted hover:border-primary/50"
-                      }`}
+                    disabled
+                    className="relative p-4 border-2 rounded-lg opacity-60 cursor-not-allowed bg-muted/20"
                   >
-                    <CreditCard className="h-6 w-6 mx-auto mb-2 text-primary" />
+                    <CreditCard className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
                     <p className="text-sm font-medium">PayPal</p>
                     <p className="text-xs text-muted-foreground mt-1">Coming Soon</p>
                     <span className="absolute top-2 right-2 bg-yellow-100 text-yellow-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
